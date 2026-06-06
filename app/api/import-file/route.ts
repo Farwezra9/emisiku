@@ -1,11 +1,30 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { PDFExtract } from "pdf.js-extract"; //  Benar, menggunakan PDFExtract
- //  Sesuaikan nama instansinya
+import { PDFExtract } from "pdf.js-extract";
 import { ACTIVITY_OPTIONS } from "@/app/constants/activities";
 import { prosesPerhitungan } from "@/app/utils/carbonCalc";
 
 const pdfExtract = new PDFExtract();
+
+/**
+ * Fungsi cerdas untuk menebak value/key aktivitas berdasarkan teks input pengguna.
+ * Mencocokkan teks ke value utama atau ke dalam array daftar aliases.
+ */
+function tebakKeyAktivitas(teksInput: string): string | null {
+  if (!teksInput) return null;
+  
+  const cleanInput = teksInput.toLowerCase().trim();
+
+  // Cari opsi aktivitas yang value atau salah satu alias-nya terkandung/cocok dengan teks input
+  const match = ACTIVITY_OPTIONS.find((opt) => {
+    const valueSesuai = cleanInput === opt.value.toLowerCase() || cleanInput.includes(opt.value.replace(/_/g, " "));
+    const aliasSesuai = opt.aliases.some((alias) => cleanInput.includes(alias.toLowerCase()));
+    
+    return valueSesuai || aliasSesuai;
+  });
+
+  return match ? match.value : null;
+}
 
 export async function POST(request: Request) {
   try {
@@ -42,6 +61,13 @@ export async function POST(request: Request) {
       for (const row of data) {
         if (!row["Kategori Aktivitas"] || row["Jumlah"] === undefined) continue;
 
+        // Tebak key aktivitas menggunakan fungsi pintar aliases
+        const inputKategori = String(row["Kategori Aktivitas"]);
+        const matchedKey = tebakKeyAktivitas(inputKategori);
+
+        // Jika tidak dikenali sama sekali oleh kamus aliases, lewati baris ini
+        if (!matchedKey) continue;
+
         let periodeVal = "";
         if (row["Periode"]) {
           if (typeof row["Periode"] === "number") {
@@ -53,15 +79,15 @@ export async function POST(request: Request) {
         }
 
         extractedRows.push({
-          aktivitas: String(row["Kategori Aktivitas"]).trim(),
-          detail_aktivitas: row["Detail / Keterangan"] ? String(row["Detail / Keterangan"]) : "",
+          aktivitas: matchedKey, // Menyimpan ID bersih (contoh: "pertalite", "pesawat_domestik")
+          detail_aktivitas: row["Detail / Keterangan"] ? String(row["Detail / Keterangan"]) : inputKategori,
           periode: periodeVal,
           jumlah: parseFloat(row["Jumlah"]) || 0
         });
       }
     } 
     // --------------------------------------------------
-    // PARSER PDF (Menggunakan pdf-js-extract)
+    // PARSER PDF (Menggunakan pdf.js-extract)
     // --------------------------------------------------
     else if (filename.endsWith(".pdf")) {
       const pdfData = await pdfExtract.extractBuffer(buffer, {});
@@ -71,22 +97,11 @@ export async function POST(request: Request) {
       // Pecah berdasarkan baris baru atau pembatas pipa untuk simulasi baris kalimat
       const cleanLines = rawText.split(/[|\n]/);
 
-      const aktivitasList = ACTIVITY_OPTIONS.map(opt => opt.value);
-      const sortedAktivitas = [...aktivitasList].sort((a, b) => b.length - a.length);
-
       for (const line of cleanLines) {
         if (!line.trim()) continue;
 
-        const lower = line.toLowerCase();
-        let matchedKey: string | null = null;
-
-        for (const aktivitas of sortedAktivitas) {
-          const cleanAktivitasSpace = aktivitas.replace(/_/g, " ");
-          if (lower.includes(cleanAktivitasSpace) || lower.includes(aktivitas)) {
-            matchedKey = aktivitas;
-            break;
-          }
-        }
+        // Tebak key aktivitas dari baris teks PDF menggunakan kecerdasan aliases
+        const matchedKey = tebakKeyAktivitas(line);
 
         if (matchedKey) {
           const angkaMatch = line.match(/\d+(?:[.,]\d+)?/);
@@ -98,15 +113,23 @@ export async function POST(request: Request) {
           }
 
           extractedRows.push({
-            aktivitas: matchedKey,
+            aktivitas: matchedKey, // Otomatis mengonversi kalimat bebas menjadi ID valid
             detail_aktivitas: line.trim(),
-            periode: "",
+            periode: "", // Default kosong untuk PDF, nanti diisi via sistem/manual
             jumlah: jumlah
           });
         }
       }
     } else {
       return NextResponse.json({ detail: "Format file tidak didukung." }, { status: 400 });
+    }
+
+    // Proteksi jika setelah di-parse tidak ada satupun data yang cocok dengan aliases
+    if (extractedRows.length === 0) {
+      return NextResponse.json(
+        { detail: "Tidak ada data aktivitas yang valid atau cocok dengan daftar faktor emisi kami." },
+        { status: 400 }
+      );
     }
 
     const hasil = prosesPerhitungan(extractedRows);

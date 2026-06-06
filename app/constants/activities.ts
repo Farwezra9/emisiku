@@ -1,10 +1,19 @@
 // app/constants/activities.ts
 
-export const ACTIVITY_OPTIONS = [
-  // ======================================================
-  // SCOPE 1
-  // ======================================================
+export interface ActivityOption {
+  value: string;
+  label: string;
+  scope: string;
+  unit: string;
+  category: string;
+  factor: number;
+  aliases: string[]; // Kamus kata alternatif / sinonim untuk deteksi otomatis
+}
 
+export const ACTIVITY_OPTIONS: ActivityOption[] = [
+  // ======================================================
+  // SCOPE 1 (Direct Emissions)
+  // ======================================================
   {
     value: "premium",
     label: "Premium",
@@ -12,8 +21,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Liter",
     category: "Fuel",
     factor: 2.31,
+    aliases: ["premium", "bensin premium", "bbm premium"],
   },
-
   {
     value: "pertalite",
     label: "Pertalite",
@@ -21,8 +30,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Liter",
     category: "Fuel",
     factor: 2.31,
+    aliases: ["pertalite", "bensin", "bensin kendaraan", "bbm", "bahan bakar"],
   },
-
   {
     value: "pertamax",
     label: "Pertamax",
@@ -30,8 +39,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Liter",
     category: "Fuel",
     factor: 2.31,
+    aliases: ["pertamax", "bensin pertamax", "pertamax 92", "pertamax plus"],
   },
-
   {
     value: "solar",
     label: "Solar",
@@ -39,8 +48,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Liter",
     category: "Fuel",
     factor: 2.68,
+    aliases: ["solar", "bahan bakar solar", "hsd", "diesel fuel"],
   },
-
   {
     value: "bio_solar",
     label: "Bio Solar",
@@ -48,8 +57,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Liter",
     category: "Fuel",
     factor: 2.54,
+    aliases: ["bio solar", "biosolar", "b30", "b35"],
   },
-
   {
     value: "dexlite",
     label: "Dexlite",
@@ -57,8 +66,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Liter",
     category: "Fuel",
     factor: 2.68,
+    aliases: ["dexlite", "bbm dexlite"],
   },
-
   {
     value: "pertamina_dex",
     label: "Pertamina Dex",
@@ -66,8 +75,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Liter",
     category: "Fuel",
     factor: 2.68,
+    aliases: ["pertamina dex", "pertaminadex", "dex"],
   },
-
   {
     value: "lpg",
     label: "LPG",
@@ -75,8 +84,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Kg",
     category: "Gas",
     factor: 2.98,
+    aliases: ["lpg", "elpiji", "gas lpg", "tabung lpg"],
   },
-
   {
     value: "lng",
     label: "LNG",
@@ -84,8 +93,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "m3",
     category: "Gas",
     factor: 2.75,
+    aliases: ["lng", "liquified natural gas", "gas alam cair"],
   },
-
   {
     value: "cng",
     label: "CNG",
@@ -93,8 +102,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "m3",
     category: "Gas",
     factor: 2.75,
+    aliases: ["cng", "compressed natural gas", "bbt", "bahan bakar gas"],
   },
-
   {
     value: "gas_alam",
     label: "Gas Alam",
@@ -102,8 +111,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "m3",
     category: "Gas",
     factor: 2.75,
+    aliases: ["gas alam", "gas bumi", "natural gas", "gas pipa"],
   },
-
   {
     value: "genset_diesel",
     label: "Genset Diesel",
@@ -111,8 +120,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Liter",
     category: "Generator",
     factor: 2.68,
+    aliases: ["genset diesel", "solar genset", "genset solar", "generator diesel"],
   },
-
   {
     value: "genset_bensin",
     label: "Genset Bensin",
@@ -120,8 +129,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Liter",
     category: "Generator",
     factor: 2.31,
+    aliases: ["genset bensin", "generator bensin", "bensin genset"],
   },
-
   {
     value: "batubara",
     label: "Batubara",
@@ -129,8 +138,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Kg",
     category: "Industrial Fuel",
     factor: 2.42,
+    aliases: ["batubara", "batu bara", "coal", "pembakaran batubara"],
   },
-
   {
     value: "pelumas",
     label: "Pelumas",
@@ -138,12 +147,12 @@ export const ACTIVITY_OPTIONS = [
     unit: "Liter",
     category: "Industrial",
     factor: 2.90,
+    aliases: ["pelumas", "oli", "oil", "oli mesin", "pelumas mesin"],
   },
 
   // ======================================================
-  // SCOPE 2
+  // SCOPE 2 (Indirect - Energy)
   // ======================================================
-
   {
     value: "listrik_pln",
     label: "Listrik PLN",
@@ -151,8 +160,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "kWh",
     category: "Electricity",
     factor: 0.85,
+    aliases: ["listrik pln", "listrik", "pln", "tagihan listrik", "konsumsi listrik", "daya listrik"],
   },
-
   {
     value: "listrik_solar_panel",
     label: "Listrik Solar Panel",
@@ -160,8 +169,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "kWh",
     category: "Renewable Energy",
     factor: 0.05,
+    aliases: ["listrik solar panel", "solar panel", "plts", "panel surya", "energi surya"],
   },
-
   {
     value: "listrik_hidro",
     label: "Listrik Hidro",
@@ -169,8 +178,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "kWh",
     category: "Renewable Energy",
     factor: 0.02,
+    aliases: ["listrik hidro", "pltah", "pltb", "energi air", "hidroelektrik"],
   },
-
   {
     value: "listrik_angin",
     label: "Listrik Angin",
@@ -178,12 +187,12 @@ export const ACTIVITY_OPTIONS = [
     unit: "kWh",
     category: "Renewable Energy",
     factor: 0.01,
+    aliases: ["listrik angin", "pltb angin", "turbin angin", "energi angin"],
   },
 
   // ======================================================
-  // SCOPE 3
+  // SCOPE 3 (Indirect - Value Chain)
   // ======================================================
-
   {
     value: "pesawat_domestik",
     label: "Pesawat Domestik",
@@ -191,8 +200,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Km",
     category: "Transportation",
     factor: 0.12,
+    aliases: ["pesawat domestik", "perjalanan pesawat", "penerbangan domestik", "pesawat", "flight domestik", "perjalanan dinas pesawat"],
   },
-
   {
     value: "pesawat_internasional",
     label: "Pesawat Internasional",
@@ -200,8 +209,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Km",
     category: "Transportation",
     factor: 0.15,
+    aliases: ["pesawat internasional", "penerbangan internasional", "flight internasional", "pesawat luar negeri"],
   },
-
   {
     value: "kereta",
     label: "Kereta",
@@ -209,8 +218,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Km",
     category: "Transportation",
     factor: 0.04,
+    aliases: ["kereta", "kereta api", "kai", "krl", "mrt", "lrt", "perjalanan kereta"],
   },
-
   {
     value: "bus",
     label: "Bus",
@@ -218,8 +227,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Km",
     category: "Transportation",
     factor: 0.10,
+    aliases: ["bus", "bis", "bus antar kota", "perjalanan bus", "angkutan bus"],
   },
-
   {
     value: "mobil_logistik",
     label: "Mobil Logistik",
@@ -227,8 +236,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Km",
     category: "Logistics",
     factor: 0.21,
+    aliases: ["mobil logistik", "van logistik", "pickup", "pick up", "mobil box", "armada logistik"],
   },
-
   {
     value: "truk_logistik",
     label: "Truk Logistik",
@@ -236,8 +245,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Km",
     category: "Logistics",
     factor: 0.27,
+    aliases: ["truk logistik", "truk", "truck", "truk kontainer", "fuso", "wingbox"],
   },
-
   {
     value: "kapal_logistik",
     label: "Kapal Logistik",
@@ -245,8 +254,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Km",
     category: "Logistics",
     factor: 0.015,
+    aliases: ["kapal logistik", "kapal kargo", "cargo ship", "pengiriman laut", "kapal laut"],
   },
-
   {
     value: "sampah_organik",
     label: "Sampah Organik",
@@ -254,8 +263,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Kg",
     category: "Waste",
     factor: 0.50,
+    aliases: ["sampah organik", "limbah organik", "sampah sisa makanan", "sampah dapur"],
   },
-
   {
     value: "sampah_anorganik",
     label: "Sampah Anorganik",
@@ -263,8 +272,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Kg",
     category: "Waste",
     factor: 0.20,
+    aliases: ["sampah anorganik", "limbah anorganik", "sampah non organik", "sampah kering"],
   },
-
   {
     value: "limbah_b3",
     label: "Limbah B3",
@@ -272,8 +281,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Kg",
     category: "Hazardous Waste",
     factor: 1.80,
+    aliases: ["limbah b3", "sampah b3", "limbah berbahaya", "hazardous waste", "limbah kimia"],
   },
-
   {
     value: "kertas",
     label: "Kertas",
@@ -281,8 +290,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Kg",
     category: "Office Material",
     factor: 1.30,
+    aliases: ["kertas", "kertas a4", "penggunaan kertas", "pembelian kertas", "rim kertas", "paper"],
   },
-
   {
     value: "plastik",
     label: "Plastik",
@@ -290,8 +299,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Kg",
     category: "Material",
     factor: 2.50,
+    aliases: ["plastik", "kemasan plastik", "botol plastik", "plastic"],
   },
-
   {
     value: "karton",
     label: "Karton",
@@ -299,8 +308,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "Kg",
     category: "Packaging",
     factor: 0.94,
+    aliases: ["karton", "kardus", "box karton", "packaging karton"],
   },
-
   {
     value: "air_bersih",
     label: "Air Bersih",
@@ -308,8 +317,8 @@ export const ACTIVITY_OPTIONS = [
     unit: "m3",
     category: "Water",
     factor: 0.344,
+    aliases: ["air bersih", "air pdam", "pdam", "konsumsi air", "penggunaan air"],
   },
-
   {
     value: "air_limbah",
     label: "Air Limbah",
@@ -317,112 +326,43 @@ export const ACTIVITY_OPTIONS = [
     unit: "m3",
     category: "Wastewater",
     factor: 0.708,
+    aliases: ["air limbah", "limbah cair", "wastewater", "pengolahan air limbah"],
   },
 ];
 
-export const ACTIVITY_LABELS: Record<
-  string,
-  string
-> = {
-  premium:
-    "Bahan bakar kendaraan Premium",
-
-  pertalite:
-    "Bahan bakar kendaraan Pertalite",
-
-  pertamax:
-    "Bahan bakar kendaraan Pertamax",
-
-  solar:
-    "Bahan bakar kendaraan Solar",
-
-  bio_solar:
-    "Bahan bakar Bio Solar",
-
-  dexlite:
-    "Bahan bakar Dexlite",
-
-  pertamina_dex:
-    "Bahan bakar Pertamina Dex",
-
-  lpg:
-    "Liquified Petroleum Gas",
-
-  lng:
-    "Liquified Natural Gas",
-
-  cng:
-    "Compressed Natural Gas",
-
-  gas_alam:
-    "Gas alam industri",
-
-  genset_diesel:
-    "Operasional genset diesel",
-
-  genset_bensin:
-    "Operasional genset bensin",
-
-  batubara:
-    "Pembakaran batubara industri",
-
-  pelumas:
-    "Penggunaan pelumas mesin",
-
-  listrik_pln:
-    "Konsumsi listrik PLN",
-
-  listrik_solar_panel:
-    "Energi listrik solar panel",
-
-  listrik_hidro:
-    "Energi listrik hidro",
-
-  listrik_angin:
-    "Energi listrik tenaga angin",
-
-  pesawat_domestik:
-    "Perjalanan pesawat domestik",
-
-  pesawat_internasional:
-    "Perjalanan pesawat internasional",
-
-  kereta:
-    "Transportasi kereta",
-
-  bus:
-    "Transportasi bus",
-
-  mobil_logistik:
-    "Distribusi mobil logistik",
-
-  truk_logistik:
-    "Distribusi truk logistik",
-
-  kapal_logistik:
-    "Distribusi kapal logistik",
-
-  sampah_organik:
-    "Sampah organik",
-
-  sampah_anorganik:
-    "Sampah anorganik",
-
-  limbah_b3:
-    "Limbah bahan berbahaya",
-
-  kertas:
-    "Penggunaan kertas",
-
-  plastik:
-    "Penggunaan plastik",
-
-  karton:
-    "Penggunaan karton",
-
-  air_bersih:
-    "Konsumsi air bersih",
-
-  air_limbah:
-    "Pengolahan air limbah",
+export const ACTIVITY_LABELS: Record<string, string> = {
+  premium: "Bahan bakar kendaraan Premium",
+  pertalite: "Bahan bakar kendaraan Pertalite",
+  pertamax: "Bahan bakar kendaraan Pertamax",
+  solar: "Bahan bakar kendaraan Solar",
+  bio_solar: "Bahan bakar Bio Solar",
+  dexlite: "Bahan bakar Dexlite",
+  pertamina_dex: "Bahan bakar Pertamina Dex",
+  lpg: "Liquified Petroleum Gas",
+  lng: "Liquified Natural Gas",
+  cng: "Compressed Natural Gas",
+  gas_alam: "Gas alam industri",
+  genset_diesel: "Operasional genset diesel",
+  genset_bensin: "Operasional genset bensin",
+  batubara: "Pembakaran batubara industri",
+  pelumas: "Penggunaan pelumas mesin",
+  listrik_pln: "Konsumsi listrik PLN",
+  listrik_solar_panel: "Energi listrik solar panel",
+  listrik_hidro: "Energi listrik hidro",
+  listrik_angin: "Energi listrik tenaga angin",
+  pesawat_domestik: "Perjalanan pesawat domestik",
+  pesawat_internasional: "Perjalanan pesawat internasional",
+  kereta: "Transportasi kereta",
+  bus: "Transportasi bus",
+  mobil_logistik: "Distribusi mobil logistik",
+  truk_logistik: "Distribusi truk logistik",
+  kapal_logistik: "Distribusi kapal logistik",
+  sampah_organik: "Sampah organik",
+  sampah_anorganik: "Sampah anorganik",
+  limbah_b3: "Limbah bahan berbahaya",
+  kertas: "Penggunaan kertas",
+  plastik: "Penggunaan plastik",
+  karton: "Penggunaan karton",
+  air_bersih: "Konsumsi air bersih",
+  air_limbah: "Pengolahan air limbah",
 };
