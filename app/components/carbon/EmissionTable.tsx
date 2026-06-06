@@ -93,20 +93,27 @@ export default function EmissionTable({ detail, onDeleteAllRecords }: Props) {
   const downloadLaporanExcel = () => {
     if (filteredData.length === 0) return;
 
-    const exportData = filteredData.map((row, idx) => ({
-      "No": idx + 1,
-      "Jenis Aktivitas": ACTIVITY_LABELS[row.aktivitas] ?? row.aktivitas,
-      "Scope": row.scope,
-      "Detail Aktivitas": row.detail_aktivitas || "-",
-      "Periode": row.periode || "-",
-      "Kategori": row.kategori || "-",
-      "Jumlah": row.jumlah,
-      "Satuan": row.satuan,
-      "Faktor Konversi": row.faktor_konversi || 0,
-      "Emisi (kgCO2e)": row.emisi_tCO2e * 1000,
-      "Emisi (tCO2e)": row.emisi_tCO2e,
-      "Sumber Data": row.file_name || "Input Manual",
-    }));
+    const exportData = filteredData.map((row, idx) => {
+      // Kembalikan ke faktor asli kgCO2e untuk Excel jika data dari DB berupa basis ton
+      const faktorAsli = row.faktor_konversi 
+        ? (row.faktor_konversi < 0.01 ? row.faktor_konversi * 1000 : row.faktor_konversi)
+        : 0;
+
+      return {
+        "No": idx + 1,
+        "Jenis Aktivitas": ACTIVITY_LABELS[row.aktivitas] ?? row.aktivitas,
+        "Scope": row.scope,
+        "Detail Aktivitas": row.detail_aktivitas || "-",
+        "Periode": row.periode || "-",
+        "Kategori": row.kategori || "-",
+        "Jumlah": row.jumlah,
+        "Satuan": row.satuan,
+        "Faktor Konversi": Number(faktorAsli.toFixed(3)),
+        "Emisi (kgCO2e)": row.emisi_tCO2e * 1000,
+        "Emisi (tCO2e)": row.emisi_tCO2e,
+        "Sumber Data": row.file_name || "Input Manual",
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
@@ -233,6 +240,13 @@ export default function EmissionTable({ detail, onDeleteAllRecords }: Props) {
                 const nomor = (currentPage - 1) * itemsPerPage + idx + 1;
                 const emisiKg = row.emisi_tCO2e * 1000; // Kalkulasi tCO2e ke kgCO2e
 
+                // PENGAMAN JIKA BACKEND MENGIRIM DATA DALAM BENTUK TON (0.00085)
+                // Kita kembalikan ke basis master data kgCO2e (0.85) agar user tidak bingung
+                let displayFaktor = row.faktor_konversi ?? 0;
+                if (displayFaktor > 0 && displayFaktor < 0.01) {
+                  displayFaktor = displayFaktor * 1000;
+                }
+
                 return (
                   <tr key={idx} className="hover:bg-gray-50 transition">
                     <td className="p-3 text-center font-semibold text-gray-500">
@@ -255,11 +269,12 @@ export default function EmissionTable({ detail, onDeleteAllRecords }: Props) {
                       <span className="text-xs text-gray-400 ml-1">{row.satuan}</span>
                     </td>
 
-                    <td className="p-3 text-right text-gray-500">
-                      {row.faktor_konversi?.toFixed(3) || "-"}
+                    {/* KOLOM FAKTOR (Memaksa memunculkan angka asli kgCO2e seperti 0.85 atau 0.708) */}
+                    <td className="p-3 text-right text-gray-900 font-mono font-semibold">
+                      {displayFaktor.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}
                     </td>
 
-                    {/* Kolom Baru: Emisi kgCO2e */}
+                    {/* Kolom: Emisi kgCO2e */}
                     <td className="p-3 text-right font-mono text-gray-700">
                       {emisiKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
@@ -269,7 +284,7 @@ export default function EmissionTable({ detail, onDeleteAllRecords }: Props) {
                       <span className="text-[10px] text-gray-400 ml-1">tCO₂e</span>
                     </td>
 
-                    {/* Kolom Baru: File Sumber Data */}
+                    {/* Kolom: File Sumber Data */}
                     <td className="p-3 text-center">
                       {row.file_name ? (
                         <div className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg text-[11px] font-medium max-w-[150px] truncate" title={row.file_name}>
