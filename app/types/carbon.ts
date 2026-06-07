@@ -22,10 +22,17 @@ export interface DetailOutput {
   emisi_tCO2e: number;
   emisi_kgCO2e?: number;
   faktor_konversi?: number;
+  file_name?: string | null;
 }
 
 export interface ResultData {
   total_tCO2e: number;
   chartData: ChartItem[];
   detail: DetailOutput[];
+}
+export interface SummaryGHG {
+  scope1: number;
+  scope2: number;
+  scope3: number;
+  total: number;
 }

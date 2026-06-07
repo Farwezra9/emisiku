@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { PDFExtract } from "pdf.js-extract";
 import { ACTIVITY_OPTIONS } from "@/app/constants/activities";
 import { prosesPerhitungan } from "@/app/utils/carbonCalc";
-
-const pdfExtract = new PDFExtract();
 
 /**
  * Fungsi cerdas untuk menebak value/key aktivitas berdasarkan teks input pengguna.
@@ -26,6 +23,19 @@ function tebakKeyAktivitas(teksInput: string): string | null {
   return match ? match.value : null;
 }
 
+/**
+ * Fungsi pembantu untuk mengekstrak angka Scope bersih (misal: "Scope 1" atau "1" -> 1)
+ */
+function dapatkanAngkaScope(teksInput: string): number | null {
+  if (!teksInput) return null;
+  const match = teksInput.toLowerCase().match(/scope\s*(\d+)/);
+  if (match) return parseInt(match[1]);
+  
+  // Jika hanya tertulis angka saja di kolom scope (misal: 1, 2, 3)
+  const angkaSaja = teksInput.match(/^\s*(\d+)\s*$/);
+  return angkaSaja ? parseInt(angkaSaja[1]) : null;
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -40,20 +50,21 @@ export async function POST(request: Request) {
     const extractedRows: any[] = [];
 
     // --------------------------------------------------
-    // PARSER EXCEL (.xlsx / .xls)
+    // PARSER SPREADSHEET (Mendukung .xlsx, .xls, dan .csv)
     // --------------------------------------------------
-    if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+    if (filename.endsWith(".xlsx") || filename.endsWith(".xls") || filename.endsWith(".csv")) {
       const workbook = XLSX.read(buffer, { type: "buffer" });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const data: any[] = XLSX.utils.sheet_to_json(worksheet);
 
       if (data.length > 0) {
-        const requiredColumns = ["Kategori Aktivitas", "Detail / Keterangan", "Jumlah"];
+        // Validasi kolom wajib yang harus ada di dalam file spreadsheet
+        const requiredColumns = ["Kategori Aktivitas", "Detail / Keterangan", "Jumlah", "Scope"];
         const firstRowKeys = Object.keys(data[0]);
         for (const col of requiredColumns) {
           if (!firstRowKeys.includes(col)) {
-            return NextResponse.json({ detail: `Kolom '${col}' tidak ditemukan di berkas Excel.` }, { status: 400 });
+            return NextResponse.json({ detail: `Kolom '${col}' tidak ditemukan di berkas dokumen.` }, { status: 400 });
           }
         }
       }
@@ -61,7 +72,6 @@ export async function POST(request: Request) {
       for (const row of data) {
         if (!row["Kategori Aktivitas"] || row["Jumlah"] === undefined) continue;
 
-        // Tebak key aktivitas menggunakan fungsi pintar aliases
         const inputKategori = String(row["Kategori Aktivitas"]);
         const matchedKey = tebakKeyAktivitas(inputKategori);
 
@@ -78,56 +88,25 @@ export async function POST(request: Request) {
           }
         }
 
+        // Ambil nilai scope angka (1, 2, atau 3)
+        const scopeVal = dapatkanAngkaScope(String(row["Scope"]));
+
         extractedRows.push({
-          aktivitas: matchedKey, // Menyimpan ID bersih (contoh: "pertalite", "pesawat_domestik")
+          aktivitas: matchedKey,
           detail_aktivitas: row["Detail / Keterangan"] ? String(row["Detail / Keterangan"]) : inputKategori,
           periode: periodeVal,
-          jumlah: parseFloat(row["Jumlah"]) || 0
+          jumlah: parseFloat(row["Jumlah"]) || 0,
+          scope: scopeVal
         });
       }
-    } 
-    // --------------------------------------------------
-    // PARSER PDF (Menggunakan pdf.js-extract)
-    // --------------------------------------------------
-    else if (filename.endsWith(".pdf")) {
-      const pdfData = await pdfExtract.extractBuffer(buffer, {});
-
-      // Ambil semua potongan teks lalu gabungkan
-      const rawText = pdfData.pages.map(p => p.content.map(c => c.str).join(" ")).join("\n");
-      // Pecah berdasarkan baris baru atau pembatas pipa untuk simulasi baris kalimat
-      const cleanLines = rawText.split(/[|\n]/);
-
-      for (const line of cleanLines) {
-        if (!line.trim()) continue;
-
-        // Tebak key aktivitas dari baris teks PDF menggunakan kecerdasan aliases
-        const matchedKey = tebakKeyAktivitas(line);
-
-        if (matchedKey) {
-          const angkaMatch = line.match(/\d+(?:[.,]\d+)?/);
-          let jumlah = 1.0;
-
-          if (angkaMatch) {
-            const numStr = angkaMatch[0].replace(",", ".");
-            jumlah = parseFloat(numStr) || 1.0;
-          }
-
-          extractedRows.push({
-            aktivitas: matchedKey, // Otomatis mengonversi kalimat bebas menjadi ID valid
-            detail_aktivitas: line.trim(),
-            periode: "", // Default kosong untuk PDF, nanti diisi via sistem/manual
-            jumlah: jumlah
-          });
-        }
-      }
     } else {
-      return NextResponse.json({ detail: "Format file tidak didukung." }, { status: 400 });
+      return NextResponse.json({ detail: "Format file tidak didukung. Harap unggah file Excel (.xlsx/.xls) atau CSV (.csv)." }, { status: 400 });
     }
 
-    // Proteksi jika setelah di-parse tidak ada satupun data yang cocok dengan aliases
+    // Proteksi akhir jika tidak ada data yang berhasil diekstrak
     if (extractedRows.length === 0) {
       return NextResponse.json(
-        { detail: "Tidak ada data aktivitas yang valid atau cocok dengan daftar faktor emisi kami." },
+        { detail: "Tidak ada data aktivitas yang valid atau cocok dengan daftar faktor emisi kami di dokumen ini." },
         { status: 400 }
       );
     }
@@ -137,7 +116,7 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     return NextResponse.json(
-      { detail: error.message || "Terjadi kesalahan internal parser" },
+      { detail: error.message || "Terjadi kesalahan internal parser spreadsheet" },
       { status: 400 }
     );
   }

@@ -23,7 +23,7 @@ export default function Home() {
         
         {/* Deskripsi */}
         <p className="text-base sm:text-lg md:text-xl text-gray-500 max-w-xl mb-8 leading-relaxed px-2">
-          Hitung, lacak, dan kategorisasi emisi GRK (*Scope 1, 2, & 3*) perusahaan Anda secara otomatis dan akurat dalam satu platform cerdas.
+          Hitung, lacak, dan kategorisasi emisi GRK (Scope 1, 2, & 3) Anda secara otomatis dan akurat dalam satu platform cerdas.
         </p>
         
         {/* Tombol Aksi yang Responsif (Menumpuk di HP, Berjejer di Desktop) */}
