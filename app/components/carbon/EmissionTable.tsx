@@ -14,7 +14,7 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-import { ACTIVITY_LABELS } from "@/app/constants/activities";
+import { ACTIVITY_LABELS, ACTIVITY_OPTIONS } from "@/app/constants/activities";
 import { DetailOutput } from "@/app/types/carbon";
 import { downloadLaporanExcel } from "@/app/utils/excelUtils";
 
@@ -35,6 +35,15 @@ export default function EmissionTable({ detail, onDeleteAllRecords }: Props) {
     const match = periodeStr.match(/\b(19|20)\d{2}\b/);
     return match ? match[0] : "Lainnya";
   };
+
+  // Membuat map untuk mempermudah pencarian nama kategori berdasarkan value aktivitas
+  const categoryMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    ACTIVITY_OPTIONS.forEach((opt) => {
+      map[opt.value] = opt.category;
+    });
+    return map;
+  }, []);
 
   const { scopeOptions, yearOptions } = useMemo(() => {
     const scopes = new Set<string>();
@@ -228,6 +237,9 @@ export default function EmissionTable({ detail, onDeleteAllRecords }: Props) {
                 let displayFaktor = row.faktor_konversi ?? 0;
                 if (displayFaktor > 0 && displayFaktor < 0.01) displayFaktor *= 1000;
 
+                // Mengambil nama kategori yang rapi dari objek konstan
+                const namaKategori = categoryMap[row.aktivitas] ?? row.aktivitas ?? "-";
+
                 return (
                   <tr key={idx} className="hover:bg-gray-50 transition">
                     <td className="p-3 text-center font-semibold text-gray-500">{nomor}</td>
@@ -237,7 +249,7 @@ export default function EmissionTable({ detail, onDeleteAllRecords }: Props) {
                     </td>
                     <td className="p-3 text-gray-600">{row.detail_aktivitas || "-"}</td>
                     <td className="p-3 text-gray-600">{row.periode || "-"}</td>
-                    <td className="p-3 text-gray-500">{row.aktivitas || "-"}</td>
+                    <td className="p-3 text-gray-500 capitalize">{namaKategori}</td>
                     <td className="p-3 text-right font-mono">
                       {row.jumlah.toLocaleString()} <span className="text-xs text-gray-400 ml-1">{row.satuan}</span>
                     </td>

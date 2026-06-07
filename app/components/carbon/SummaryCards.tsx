@@ -32,7 +32,7 @@ export default function SummaryCards({
         <SummaryCard
           key={item.name}
           title={item.name}
-          value={`${formatNumber(item.value)} t`}
+          value={`${formatNumber(item.value)} tco2e`}
           color={item.color}
         />
       ))}

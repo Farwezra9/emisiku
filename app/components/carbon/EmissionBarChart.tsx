@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { formatNumber } from "@/app/utils/format";
 import {
   ResponsiveContainer,
   BarChart,

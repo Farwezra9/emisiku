@@ -330,39 +330,11 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
   },
 ];
 
-export const ACTIVITY_LABELS: Record<string, string> = {
-  premium: "Bahan bakar kendaraan Premium",
-  pertalite: "Bahan bakar kendaraan Pertalite",
-  pertamax: "Bahan bakar kendaraan Pertamax",
-  solar: "Bahan bakar kendaraan Solar",
-  bio_solar: "Bahan bakar Bio Solar",
-  dexlite: "Bahan bakar Dexlite",
-  pertamina_dex: "Bahan bakar Pertamina Dex",
-  lpg: "Liquified Petroleum Gas",
-  lng: "Liquified Natural Gas",
-  cng: "Compressed Natural Gas",
-  gas_alam: "Gas alam industri",
-  genset_diesel: "Operasional genset diesel",
-  genset_bensin: "Operasional genset bensin",
-  batubara: "Pembakaran batubara industri",
-  pelumas: "Penggunaan pelumas mesin",
-  listrik_pln: "Konsumsi listrik PLN",
-  listrik_solar_panel: "Energi listrik solar panel",
-  listrik_hidro: "Energi listrik hidro",
-  listrik_angin: "Energi listrik tenaga angin",
-  pesawat_domestik: "Perjalanan pesawat domestik",
-  pesawat_internasional: "Perjalanan pesawat internasional",
-  kereta: "Transportasi kereta",
-  bus: "Transportasi bus",
-  mobil_logistik: "Distribusi mobil logistik",
-  truk_logistik: "Distribusi truk logistik",
-  kapal_logistik: "Distribusi kapal logistik",
-  sampah_organik: "Sampah organik",
-  sampah_anorganik: "Sampah anorganik",
-  limbah_b3: "Limbah bahan berbahaya",
-  kertas: "Penggunaan kertas",
-  plastik: "Penggunaan plastik",
-  karton: "Penggunaan karton",
-  air_bersih: "Konsumsi air bersih",
-  air_limbah: "Pengolahan air limbah",
-};
+// Men-generate ACTIVITY_LABELS secara dinamis menggunakan JavaScript Record reducer
+export const ACTIVITY_LABELS: Record<string, string> = ACTIVITY_OPTIONS.reduce(
+  (acc, cur) => {
+    acc[cur.value] = cur.label;
+    return acc;
+  },
+  {} as Record<string, string>
+);
