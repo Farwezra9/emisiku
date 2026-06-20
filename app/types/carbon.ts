@@ -19,6 +19,7 @@ export interface DetailOutput {
   scope: string;
   jumlah: number;
   satuan: string;
+  kategori: string;
   emisi_tCO2e: number;
   emisi_kgCO2e?: number;
   faktor_konversi?: number;

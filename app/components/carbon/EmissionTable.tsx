@@ -28,6 +28,12 @@ const REF_BADGE: Record<ReferenceKey, string> = {
 };
 const REF_SHORT: Record<ReferenceKey, string> = { ESDM: "ESDM", IPCC: "IPCC", DEFRA: "DEFRA" };
 
+// Helper — resolve kategori dari ACTIVITY_OPTIONS berdasarkan value aktivitas
+// Ini sumber kebenaran tunggal; tidak bergantung pada field `kategori` di DB.
+function resolveKategori(aktivitas: string): string {
+  return ACTIVITY_OPTIONS.find((o) => o.value === aktivitas)?.category ?? aktivitas;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DETEKSI REFERENSI
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,8 +96,10 @@ function ReferenceBadge({
 
   if (isZeroEmission) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-600 border border-teal-100"
-        title="Energi terbarukan — faktor emisi nol">
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-600 border border-teal-100"
+        title="Energi terbarukan — faktor emisi nol"
+      >
         <Leaf size={9} />Zero
       </span>
     );
@@ -101,7 +109,10 @@ function ReferenceBadge({
       ? `Nilai faktor identik di: ${allMatches.map((r) => REF_SHORT[r]).join(", ")} — ditampilkan sesuai referensi aktif (${REF_SHORT[ref]})`
       : REFERENCE_METADATA[ref].label;
     return (
-      <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[10px] font-bold border ${REF_BADGE[ref]}`} title={tooltipText}>
+      <span
+        className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[10px] font-bold border ${REF_BADGE[ref]}`}
+        title={tooltipText}
+      >
         {REF_SHORT[ref]}
         {isAmbiguous && <span className="opacity-40 text-[9px] font-normal leading-none">*</span>}
       </span>
@@ -120,12 +131,6 @@ function setColWidths(ws: XLSX.WorkSheet, widths: number[]) {
 // ─────────────────────────────────────────────────────────────────────────────
 // EXPORT KE TABLEAU-READY XLSX (4 sheet)
 // ─────────────────────────────────────────────────────────────────────────────
-/**
- * Sheet 1 — Raw_Data        : data mentah per baris aktivitas, flat, numerik murni
- * Sheet 2 — Summary_by_Scope: total kgCO2e & tCO2e per scope + grand total
- * Sheet 3 — Summary_by_Year : total kgCO2e & tCO2e per tahun per scope
- * Sheet 4 — Renewable_vs_NonRenewable: perbandingan zero-emission vs non
- */
 function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey) {
   const wb = XLSX.utils.book_new();
 
@@ -144,32 +149,36 @@ function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey)
 
     const scopeNum = row.scope?.includes("1") ? 1 : row.scope?.includes("2") ? 2 : 3;
 
+    // ✅ Gunakan resolveKategori() — tidak bergantung pada row.kategori
+    const kategori = resolveKategori(row.kategori);
+
     return {
       raw: {
-        "No":                            0, // diisi nanti
-        "Activity_ID":                   row.aktivitas,
-        "Activity_Name":                 ACTIVITY_LABELS[row.aktivitas] ?? row.aktivitas,
-        "Activity_Detail":               row.detail_aktivitas ?? "",
-        "Scope":                         row.scope ?? "",
-        "Scope_Number":                  scopeNum,
-        "Category":                      row.aktivitas ?? "",
-        "Period_Year":                   periodeYear,
-        "Unit":                          row.satuan ?? "",
-        "Quantity":                      row.jumlah,
+        "No":                              0, // diisi nanti
+        "Activity_ID":                     row.aktivitas,
+        "Activity_Name":                   ACTIVITY_LABELS[row.aktivitas] ?? row.aktivitas,
+        "Activity_Detail":                 row.detail_aktivitas ?? "",
+        "Scope":                           row.scope ?? "",
+        "Scope_Number":                    scopeNum,
+        "Category":                        kategori,   // ✅ dari ACTIVITY_OPTIONS
+        "Period_Year":                     periodeYear,
+        "Unit":                            row.satuan ?? "",
+        "Quantity":                        row.jumlah,
         "Emission_Factor_kgCO2e_per_unit": Number(faktor.toFixed(6)),
-        "Emission_kgCO2e":               Number(emisiKg.toFixed(4)),
-        "Emission_tCO2e":                Number(row.emisi_tCO2e.toFixed(6)),
-        "Is_Zero_Emission":              isZeroEmission ? "Yes" : "No",
-        "Energy_Type":                   isZeroEmission ? "Renewable" : "Non-Renewable",
-        "Reference_Source":              refLabel,
-        "Data_Source":                   row.file_name ?? "Manual Input",
+        "Emission_kgCO2e":                 Number(emisiKg.toFixed(4)),
+        "Emission_tCO2e":                  Number(row.emisi_tCO2e.toFixed(6)),
+        "Is_Zero_Emission":                isZeroEmission ? "Yes" : "No",
+        "Energy_Type":                     isZeroEmission ? "Renewable" : "Non-Renewable",
+        "Reference_Source":                refLabel,
+        "Data_Source":                     row.file_name ?? "Manual Input",
       },
-      scope:      row.scope ?? "Unknown",
+      scope:   row.scope ?? "Unknown",
       scopeNum,
-      year:       periodeYear,
-      kgCO2e:     Number(emisiKg.toFixed(4)),
-      tCO2e:      Number(row.emisi_tCO2e.toFixed(6)),
-      isZero:     isZeroEmission,
+      year:    periodeYear,
+      kgCO2e:  Number(emisiKg.toFixed(4)),
+      tCO2e:   Number(row.emisi_tCO2e.toFixed(6)),
+      isZero:  isZeroEmission,
+      kategori,  // ✅ disimpan untuk sheet Renewable_vs_NonRenewable
     };
   });
 
@@ -179,7 +188,7 @@ function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey)
   setColWidths(ws1, [6, 24, 32, 32, 22, 14, 18, 12, 10, 12, 30, 16, 16, 16, 16, 18, 24]);
   XLSX.utils.book_append_sheet(wb, ws1, "Raw_Data");
 
-  // ── SHEET 2: Summary_by_Scope ────────────────────────────────────────────
+  // ── SHEET 2: Summary_by_Scope ─────────────────────────────────────────────
   const scopeAccum: Record<string, { kg: number; t: number; count: number }> = {};
   processed.forEach((p) => {
     if (!scopeAccum[p.scope]) scopeAccum[p.scope] = { kg: 0, t: 0, count: 0 };
@@ -188,10 +197,10 @@ function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey)
     scopeAccum[p.scope].count += 1;
   });
 
-  const scopeOrder = ["Scope 1 (Direct)", "Scope 2 (Indirect - Energy)", "Scope 3 (Value Chain)"];
+  const scopeOrder = ["Scope 1", "Scope 2", "Scope 3"];
   const sortedScopes = Object.keys(scopeAccum).sort((a, b) => {
-    const ia = scopeOrder.findIndex((s) => a.includes(s.split(" ")[1]));
-    const ib = scopeOrder.findIndex((s) => b.includes(s.split(" ")[1]));
+    const ia = scopeOrder.findIndex((s) => a.includes(s));
+    const ib = scopeOrder.findIndex((s) => b.includes(s));
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
 
@@ -200,20 +209,20 @@ function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey)
 
   const summaryByScope = [
     ...sortedScopes.map((scope) => ({
-      "Scope":                scope,
-      "Total_Records":        scopeAccum[scope].count,
+      "Scope":                 scope,
+      "Total_Records":         scopeAccum[scope].count,
       "Total_Emission_kgCO2e": Number(scopeAccum[scope].kg.toFixed(4)),
       "Total_Emission_tCO2e":  Number(scopeAccum[scope].t.toFixed(6)),
       "Percentage_%":          Number(((scopeAccum[scope].t / totalT) * 100).toFixed(2)),
-      "Row_Type":             "Scope",
+      "Row_Type":              "Scope",
     })),
     {
-      "Scope":                "GRAND TOTAL",
-      "Total_Records":        processed.length,
+      "Scope":                 "GRAND TOTAL",
+      "Total_Records":         processed.length,
       "Total_Emission_kgCO2e": Number(totalKg.toFixed(4)),
       "Total_Emission_tCO2e":  Number(totalT.toFixed(6)),
       "Percentage_%":          100,
-      "Row_Type":             "Total",
+      "Row_Type":              "Total",
     },
   ];
   const ws2 = XLSX.utils.json_to_sheet(summaryByScope);
@@ -221,7 +230,6 @@ function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey)
   XLSX.utils.book_append_sheet(wb, ws2, "Summary_by_Scope");
 
   // ── SHEET 3: Summary_by_Year ──────────────────────────────────────────────
-  // Struktur: Year | Scope | kgCO2e | tCO2e — flat untuk Tableau pivot/crosstab
   const yearScopeMap: Record<string, { kg: number; t: number; count: number }> = {};
   processed.forEach((p) => {
     const key = `${p.year ?? "Unknown"}|||${p.scope}`;
@@ -260,10 +268,10 @@ function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey)
     else          { nonKg  += p.kgCO2e; nonT  += p.tCO2e; nonCount++;  }
   });
 
-  // Breakdown per kategori energi terbarukan vs non
+  // ✅ Gunakan p.kategori (sudah di-resolve dari ACTIVITY_OPTIONS di atas)
   const categoryRenew: Record<string, { kg: number; t: number; count: number; isZero: boolean }> = {};
   processed.forEach((p) => {
-    const cat = p.raw["Category"] || "Other";
+    const cat = p.kategori || "Other";
     if (!categoryRenew[cat]) categoryRenew[cat] = { kg: 0, t: 0, count: 0, isZero: p.isZero };
     categoryRenew[cat].kg    += p.kgCO2e;
     categoryRenew[cat].t     += p.tCO2e;
@@ -271,7 +279,6 @@ function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey)
   });
 
   const renewableRows = [
-    // Baris ringkasan
     {
       "Energy_Type":           "Renewable (Zero-Emission)",
       "Category":              "ALL",
@@ -299,7 +306,6 @@ function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey)
       "Percentage_of_Total_%": 100,
       "Row_Type":              "Total",
     },
-    // Baris detail per kategori
     ...Object.entries(categoryRenew)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([cat, val]) => ({
@@ -336,9 +342,9 @@ interface Props {
 // KOMPONEN UTAMA
 // ─────────────────────────────────────────────────────────────────────────────
 export default function EmissionTable({ detail, onDeleteAllRecords, selectedReference }: Props) {
-  const [currentPage,   setCurrentPage]   = useState(1);
-  const [selectedScope, setSelectedScope] = useState<string>("all");
-  const [selectedYear,  setSelectedYear]  = useState<string>("all");
+  const [currentPage,     setCurrentPage]     = useState(1);
+  const [selectedScope,   setSelectedScope]   = useState<string>("all");
+  const [selectedYear,    setSelectedYear]    = useState<string>("all");
   const [showTableauInfo, setShowTableauInfo] = useState(false);
 
   const itemsPerPage = 10;
@@ -349,6 +355,7 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
     return match ? match[0] : "Lainnya";
   };
 
+  // ✅ categoryMap masih dipakai untuk render kolom Kategori di tabel
   const categoryMap = useMemo(() => {
     const map: Record<string, string> = {};
     ACTIVITY_OPTIONS.forEach((opt) => { map[opt.value] = opt.category; });
@@ -455,7 +462,9 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
         return [
           i + 1,
           ACTIVITY_LABELS[row.aktivitas] ?? row.aktivitas,
-          row.scope, row.detail_aktivitas || "-", getYearFromPeriode(row.periode),
+          row.scope,
+          row.detail_aktivitas || "-",
+          getYearFromPeriode(row.periode),
           `${row.jumlah.toLocaleString()} ${row.satuan}`,
           f.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }),
           getRefLabelForPDF(row.aktivitas, f, kg),
@@ -478,17 +487,12 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
     doc.setFontSize(7);
     doc.setTextColor(150);
     doc.text("* = faktor identik di beberapa referensi, ditampilkan sesuai referensi aktif saat ekspor.", 14, finalY + 6);
-
     doc.save(`Laporan_Emisi_${new Date().toISOString().split("T")[0]}.pdf`);
   };
 
   if (detail.length === 0) return null;
 
   const legendRefs: ReferenceKey[] = ["ESDM", "IPCC", "DEFRA"];
-
-  // Tableau Public embed URL — ganti dengan URL viz Anda
-  // Format: https://public.tableau.com/views/[WorkbookName]/[SheetName]
-  const TABLEAU_PUBLIC_URL = "https://public.tableau.com/views/GHGEmissionDashboard/Overview";
 
   return (
     <div className="space-y-6">
@@ -525,15 +529,14 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
                 Export Tableau
               </button>
 
-              {/* Tooltip info */}
               {showTableauInfo && (
                 <div className="absolute right-0 top-full mt-2 w-72 bg-gray-900 text-white text-[11px] rounded-xl p-3 z-50 shadow-xl leading-relaxed">
                   <p className="font-semibold mb-1.5">Format Tableau-Ready (.xlsx) — 4 Sheet</p>
                   <div className="space-y-1 text-gray-300">
                     <p><span className="text-white font-medium">① Raw_Data</span> — data mentah per baris aktivitas</p>
-                    <p><span className="text-white font-medium">② Summary_by_Scope</span> — total kgCO₂e & tCO₂e per scope + grand total + persentase</p>
+                    <p><span className="text-white font-medium">② Summary_by_Scope</span> — total kgCO₂e & tCO₂e per scope</p>
                     <p><span className="text-white font-medium">③ Summary_by_Year</span> — total per tahun per scope</p>
-                    <p><span className="text-white font-medium">④ Renewable_vs_NonRenewable</span> — perbandingan energi terbarukan vs non per kategori</p>
+                    <p><span className="text-white font-medium">④ Renewable_vs_NonRenewable</span> — perbandingan energi terbarukan vs non</p>
                   </div>
                 </div>
               )}
@@ -617,7 +620,9 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
                   const emisiKg  = row.emisi_tCO2e * 1000;
                   let displayFaktor = row.faktor_konversi ?? 0;
                   if (displayFaktor > 0 && displayFaktor < 0.01) displayFaktor *= 1000;
-                  const namaKategori = categoryMap[row.aktivitas] ?? row.aktivitas ?? "-";
+
+                  // ✅ Gunakan categoryMap — tidak akses row.kategori
+                  const namaKategori = categoryMap[row.aktivitas] ?? "-";
 
                   return (
                     <tr key={idx} className="hover:bg-gray-50/70 transition">
@@ -637,7 +642,12 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
                         {displayFaktor.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                       </td>
                       <td className="p-3 text-center">
-                        <ReferenceBadge aktivitas={row.aktivitas} faktorKonversi={displayFaktor} emisiKgco2e={emisiKg} selectedReference={selectedReference} />
+                        <ReferenceBadge
+                          aktivitas={row.aktivitas}
+                          faktorKonversi={displayFaktor}
+                          emisiKgco2e={emisiKg}
+                          selectedReference={selectedReference}
+                        />
                       </td>
                       <td className="p-3 text-right font-mono text-gray-700 text-xs">
                         {emisiKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -677,13 +687,19 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
               dari <span className="font-semibold">{filteredData.length}</span> data
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+              >
                 <ChevronLeft size={16} /> Prev
               </button>
               <div className="px-4 py-2 text-sm font-semibold text-gray-700">{currentPage} / {totalPages}</div>
-              <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition">
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+              >
                 Next <ChevronRight size={16} />
               </button>
             </div>
@@ -701,29 +717,20 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
 // KOMPONEN TABLEAU EMBED
 // ─────────────────────────────────────────────────────────────────────────────
 function TableauEmbedSection() {
-  const [embedUrl, setEmbedUrl] = useState("");
-  const [inputUrl, setInputUrl] = useState("");
+  const [embedUrl,   setEmbedUrl]   = useState("");
+  const [inputUrl,   setInputUrl]   = useState("");
   const [isEmbedded, setIsEmbedded] = useState(false);
-  const [showGuide, setShowGuide] = useState(false);
+  const [showGuide,  setShowGuide]  = useState(false);
 
   const handleEmbed = () => {
     if (!inputUrl.trim()) return;
+    let url = inputUrl.trim().split("?")[0];
 
-    // Normalisasi URL Tableau Public ke format embed
-    // https://public.tableau.com/views/[workbook]/[sheet]
-    // → https://public.tableau.com/views/[workbook]/[sheet]?:embed=y&:showVizHome=no
-    let url = inputUrl.trim();
-
-    // Hapus query string lama jika ada
-    url = url.split("?")[0];
-
-    // Pastikan format URL benar
     if (!url.includes("public.tableau.com/views") && !url.includes("public.tableau.com/app/profile")) {
       alert("Masukkan URL Tableau Public yang valid.\nContoh: https://public.tableau.com/views/NamaWorkbook/NamaSheet");
       return;
     }
 
-    // Tambahkan parameter embed
     const embedParams = "?:embed=y&:showVizHome=no&:toolbar=yes&:tabs=no&:device=desktop";
     setEmbedUrl(url + embedParams);
     setIsEmbedded(true);
@@ -740,7 +747,6 @@ function TableauEmbedSection() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          {/* Tableau logo */}
           <div className="w-8 h-8 rounded-lg bg-[#1f77b4] flex items-center justify-center">
             <svg width="16" height="16" viewBox="0 0 32 32" fill="white">
               <path d="M14.5 4h3v6.5H24v3h-6.5V20h-3v-6.5H8v-3h6.5z"/>
@@ -762,20 +768,20 @@ function TableauEmbedSection() {
         </button>
       </div>
 
-      {/* Panduan penggunaan */}
+      {/* Panduan */}
       {showGuide && (
         <div className="mx-6 mt-4 bg-blue-50 border border-blue-100 rounded-xl p-4 text-[12px] text-blue-800 space-y-2">
           <p className="font-bold text-[13px]">Cara integrasi dengan Tableau Public:</p>
           <ol className="list-decimal list-inside space-y-1.5 text-blue-700">
-            <li>Klik tombol <strong>Export Tableau</strong> di tabel atas untuk download file <code>.xlsx</code> format Tableau-ready.</li>
-            <li>Buka <a href="https://public.tableau.com" target="_blank" rel="noopener noreferrer" className="underline font-semibold">Tableau Public</a> dan login, lalu klik <strong>Create → Web Authoring</strong>.</li>
-            <li>Upload file <code>Tableau_GHG_Emission_*.xlsx</code> sebagai data source. Tersedia 4 sheet: <strong>Raw_Data</strong>, <strong>Summary_by_Scope</strong>, <strong>Summary_by_Year</strong>, <strong>Renewable_vs_NonRenewable</strong>.</li>
-            <li>Buat viz/dashboard sesuai kebutuhan, lalu klik <strong>Publish</strong>.</li>
-            <li>Buka viz yang sudah dipublish, klik tombol <strong>Share</strong> → salin <strong>Link</strong>-nya.</li>
-            <li>Tempel URL tersebut di kotak input di bawah ini dan klik <strong>Tampilkan</strong>.</li>
+            <li>Klik <strong>Export Tableau</strong> di tabel atas untuk download file <code>.xlsx</code> Tableau-ready (4 sheet).</li>
+            <li>Buka <a href="https://public.tableau.com" target="_blank" rel="noopener noreferrer" className="underline font-semibold">Tableau Public</a> → login → <strong>Create → Web Authoring</strong>.</li>
+            <li>Upload file <code>Tableau_GHG_Emission_*.xlsx</code> sebagai data source.</li>
+            <li>Buat viz/dashboard, lalu klik <strong>Publish</strong>.</li>
+            <li>Buka viz yang sudah dipublish → <strong>Share</strong> → salin <strong>Link</strong>.</li>
+            <li>Tempel URL di kotak input di bawah → klik <strong>Tampilkan</strong>.</li>
           </ol>
           <p className="text-blue-500 text-[11px] mt-1">
-            Format URL yang valid: <code>https://public.tableau.com/views/NamaWorkbook/NamaSheet</code>
+            Format URL valid: <code>https://public.tableau.com/views/NamaWorkbook/NamaSheet</code>
           </p>
         </div>
       )}
@@ -806,10 +812,7 @@ function TableauEmbedSection() {
               <div className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse" />
               <p className="text-xs font-medium text-blue-800 truncate">{embedUrl.split("?")[0]}</p>
             </div>
-            <button
-              onClick={handleReset}
-              className="text-xs font-semibold text-red-500 hover:text-red-700 transition shrink-0"
-            >
+            <button onClick={handleReset} className="text-xs font-semibold text-red-500 hover:text-red-700 transition shrink-0">
               Ganti URL
             </button>
           </div>
@@ -834,7 +837,6 @@ function TableauEmbedSection() {
           </p>
         </div>
       ) : !isEmbedded ? (
-        /* Placeholder state */
         <div className="mx-6 mb-6 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 flex flex-col items-center justify-center py-14 gap-3 text-center">
           <div className="w-14 h-14 rounded-2xl bg-[#1f77b4]/10 flex items-center justify-center">
             <svg width="28" height="28" viewBox="0 0 32 32" fill="#1f77b4">
