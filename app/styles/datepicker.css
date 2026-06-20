@@ -1,0 +1,47 @@
+/* app/styles/datepicker.css */
+
+.react-datepicker {
+  border: none !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+  box-shadow:
+    0 10px 25px rgba(0,0,0,0.08),
+    0 4px 10px rgba(0,0,0,0.04);
+  font-family: inherit !important;
+}
+
+.react-datepicker__header {
+  background: #10b981 !important;
+  border-bottom: none !important;
+  padding: 14px !important;
+}
+
+.react-datepicker__current-month {
+  color: white !important;
+  font-weight: 700 !important;
+}
+
+.react-datepicker__year-text {
+  border-radius: 10px !important;
+  padding: 10px 0 !important;
+  transition: all 0.2s ease;
+}
+
+.react-datepicker__year-text:hover {
+  background: #ecfdf5 !important;
+  color: #10b981 !important;
+}
+
+.react-datepicker__year-text--selected {
+  background: #10b981 !important;
+  color: white !important;
+  font-weight: 700 !important;
+}
+
+.react-datepicker__navigation {
+  top: 16px !important;
+}
+
+.react-datepicker__triangle {
+  display: none !important;
+}

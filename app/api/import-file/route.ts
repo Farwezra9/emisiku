@@ -1,26 +1,52 @@
+//app/api/import-file/route.ts
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { ACTIVITY_OPTIONS } from "@/app/constants/activities";
+import { ACTIVITY_OPTIONS, ReferenceKey } from "@/app/constants/activities";
 import { prosesPerhitungan } from "@/app/utils/carbonCalc";
 
 /**
  * Fungsi cerdas untuk menebak value/key aktivitas berdasarkan teks input pengguna.
- * Mencocokkan teks ke value utama atau ke dalam array daftar aliases.
+ *
+ * Tiga lapisan pencarian dengan prioritas:
+ *  1. Exact match pada value utama      → "solar" == "solar"
+ *  2. Exact match pada salah satu alias → "hsd" == "hsd"
+ *  3. Input mengandung alias (fuzzy)    → pilih alias TERPANJANG yang cocok
+ *     agar aktivitas lebih spesifik menang (misal "bio solar" > "solar")
  */
 function tebakKeyAktivitas(teksInput: string): string | null {
   if (!teksInput) return null;
-  
+
   const cleanInput = teksInput.toLowerCase().trim();
 
-  // Cari opsi aktivitas yang value atau salah satu alias-nya terkandung/cocok dengan teks input
-  const match = ACTIVITY_OPTIONS.find((opt) => {
-    const valueSesuai = cleanInput === opt.value.toLowerCase() || cleanInput.includes(opt.value.replace(/_/g, " "));
-    const aliasSesuai = opt.aliases.some((alias) => cleanInput.includes(alias.toLowerCase()));
-    
-    return valueSesuai || aliasSesuai;
-  });
+  // ── PASS 1: Exact match pada value utama ──
+  const exactValue = ACTIVITY_OPTIONS.find(
+    (opt) => cleanInput === opt.value.replace(/_/g, " ")
+  );
+  if (exactValue) return exactValue.value;
 
-  return match ? match.value : null;
+  // ── PASS 2: Exact match pada salah satu alias ──
+  const exactAlias = ACTIVITY_OPTIONS.find((opt) =>
+    opt.aliases.some((alias) => cleanInput === alias.toLowerCase())
+  );
+  if (exactAlias) return exactAlias.value;
+
+  // ── PASS 3: Input MENGANDUNG alias (fuzzy) ──
+  // Pilih alias terpanjang yang cocok agar yang lebih spesifik selalu menang.
+  // Contoh: input "bio solar" → alias "bio solar" (9 char) menang atas "solar" (5 char)
+  let bestMatch: { value: string; aliasLen: number } | null = null;
+
+  for (const opt of ACTIVITY_OPTIONS) {
+    for (const alias of opt.aliases) {
+      const aliasLower = alias.toLowerCase();
+      if (cleanInput.includes(aliasLower)) {
+        if (!bestMatch || aliasLower.length > bestMatch.aliasLen) {
+          bestMatch = { value: opt.value, aliasLen: aliasLower.length };
+        }
+      }
+    }
+  }
+
+  return bestMatch ? bestMatch.value : null;
 }
 
 /**
@@ -30,16 +56,27 @@ function dapatkanAngkaScope(teksInput: string): number | null {
   if (!teksInput) return null;
   const match = teksInput.toLowerCase().match(/scope\s*(\d+)/);
   if (match) return parseInt(match[1]);
-  
+
   // Jika hanya tertulis angka saja di kolom scope (misal: 1, 2, 3)
   const angkaSaja = teksInput.match(/^\s*(\d+)\s*$/);
   return angkaSaja ? parseInt(angkaSaja[1]) : null;
+}
+
+// Validasi nilai reference yang dikirim dari frontend
+const VALID_REFERENCES: ReferenceKey[] = ["ESDM", "IPCC", "DEFRA"];
+
+function parseReference(value: FormDataEntryValue | null): ReferenceKey {
+  if (typeof value === "string" && VALID_REFERENCES.includes(value as ReferenceKey)) {
+    return value as ReferenceKey;
+  }
+  return "ESDM";
 }
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
+    const reference = parseReference(formData.get("reference"));
 
     if (!file) {
       return NextResponse.json({ detail: "File tidak ditemukan" }, { status: 400 });
@@ -64,7 +101,10 @@ export async function POST(request: Request) {
         const firstRowKeys = Object.keys(data[0]);
         for (const col of requiredColumns) {
           if (!firstRowKeys.includes(col)) {
-            return NextResponse.json({ detail: `Kolom '${col}' tidak ditemukan di berkas dokumen.` }, { status: 400 });
+            return NextResponse.json(
+              { detail: `Kolom '${col}' tidak ditemukan di berkas dokumen.` },
+              { status: 400 }
+            );
           }
         }
       }
@@ -78,13 +118,20 @@ export async function POST(request: Request) {
         // Jika tidak dikenali sama sekali oleh kamus aliases, lewati baris ini
         if (!matchedKey) continue;
 
-        let periodeVal = "";
+        let periodeVal: number | undefined;
+
         if (row["Periode"]) {
           if (typeof row["Periode"] === "number") {
-            const dateObj = XLSX.SSF.parse_date_code(row["Periode"]);
-            periodeVal = `${dateObj.y}-${String(dateObj.m).padStart(2, '0')}-${String(dateObj.d).padStart(2, '0')}`;
+            // Excel date serial atau tahun langsung
+            if (row["Periode"] > 1900 && row["Periode"] < 3000) {
+              periodeVal = row["Periode"];
+            } else {
+              const dateObj = XLSX.SSF.parse_date_code(row["Periode"]);
+              periodeVal = dateObj.y;
+            }
           } else {
-            periodeVal = String(row["Periode"]).trim().substring(0, 10);
+            const tahun = parseInt(String(row["Periode"]).match(/\d{4}/)?.[0] || "");
+            periodeVal = isNaN(tahun) ? undefined : tahun;
           }
         }
 
@@ -93,14 +140,19 @@ export async function POST(request: Request) {
 
         extractedRows.push({
           aktivitas: matchedKey,
-          detail_aktivitas: row["Detail / Keterangan"] ? String(row["Detail / Keterangan"]) : inputKategori,
+          detail_aktivitas: row["Detail / Keterangan"]
+            ? String(row["Detail / Keterangan"])
+            : inputKategori,
           periode: periodeVal,
           jumlah: parseFloat(row["Jumlah"]) || 0,
-          scope: scopeVal
+          scope: scopeVal,
         });
       }
     } else {
-      return NextResponse.json({ detail: "Format file tidak didukung. Harap unggah file Excel (.xlsx/.xls) atau CSV (.csv)." }, { status: 400 });
+      return NextResponse.json(
+        { detail: "Format file tidak didukung. Harap unggah file Excel (.xlsx/.xls) atau CSV (.csv)." },
+        { status: 400 }
+      );
     }
 
     // Proteksi akhir jika tidak ada data yang berhasil diekstrak
@@ -111,7 +163,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const hasil = prosesPerhitungan(extractedRows);
+    // Hitung emisi menggunakan referensi yang dipilih user
+    const hasil = prosesPerhitungan(extractedRows, reference);
     return NextResponse.json(hasil);
 
   } catch (error: any) {

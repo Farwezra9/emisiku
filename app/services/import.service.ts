@@ -1,12 +1,16 @@
-const API_URL =
-  "";
+//services/import.service.ts
+import { ReferenceKey } from "@/app/constants/activities";
+
+const API_URL = "";
 
 export async function importEmissionFile(
-  file: File
+  file: File,
+  reference: ReferenceKey = "ESDM"
 ) {
   const formData = new FormData();
 
   formData.append("file", file);
+  formData.append("reference", reference);
 
   const response = await fetch(
     `${API_URL}/api/import-file`,

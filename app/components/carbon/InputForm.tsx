@@ -1,6 +1,9 @@
+//components/carbon/InputForm.tsx
 "use client";
-
-import { useState, useEffect } from "react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import "@/app/styles/datepicker.css";
+import { useState, useEffect, useCallback } from "react";
 import {
   Plus,
   Trash2,
@@ -19,12 +22,21 @@ import {
   XCircle,
   X,
   Calendar,
+  BookOpen,
+  ExternalLink,
+  BookText,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { InputRow } from "@/app/types/carbon";
 import { importEmissionFile } from "@/app/services/import.service";
-import { ACTIVITY_OPTIONS, ACTIVITY_LABELS } from "@/app/constants/activities";
+import {
+  ACTIVITY_OPTIONS,
+  ACTIVITY_LABELS,
+  REFERENCE_METADATA,
+  ReferenceKey,
+  getEmissionFactor,
+} from "@/app/constants/activities";
 import { supabase } from "@/app/lib/supabase";
 
 interface ImportedFileRow {
@@ -52,7 +64,11 @@ interface Props {
   importedFiles?: ImportedFileRow[];
   onDownloadFile?: (path: string, name: string) => void;
   onDeleteFile?: (fileId: string, filePath: string) => void;
+  selectedReference: ReferenceKey;
+  onReferenceChange: (ref: ReferenceKey) => void;
 }
+
+const REFERENCE_ORDER: ReferenceKey[] = ["ESDM", "IPCC", "DEFRA"];
 
 export default function InputForm({
   inputs,
@@ -65,51 +81,39 @@ export default function InputForm({
   importedFiles = [],
   onDownloadFile,
   onDeleteFile,
+  selectedReference,
+  onReferenceChange,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"manual" | "import">("manual");
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  
+  const [isDragging, setIsDragging] = useState(false);
+
   const [modal, setModal] = useState<{
     isOpen: boolean;
     type: "success" | "error";
     title: string;
     message: string;
-  }>({
-    isOpen: false,
-    type: "success",
-    title: "",
-    message: "",
-  });
+  }>({ isOpen: false, type: "success", title: "", message: "" });
 
   useEffect(() => {
     if (modal.isOpen) {
-      const timer = setTimeout(() => {
-        setModal((prev) => ({ ...prev, isOpen: false }));
-      }, 3000);
+      const timer = setTimeout(() => setModal((p) => ({ ...p, isOpen: false })), 3000);
       return () => clearTimeout(timer);
     }
   }, [modal.isOpen]);
 
-  // ======================================================
-  // FILE UPLOAD & EXTRACTION PROCESS (EXCEL & CSV ONLY)
-  // ======================================================
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Proteksi sisi Client: Hanya izinkan Excel dan CSV
+  // ── Process uploaded file ──────────────────────────────────────────────────
+  const processFile = useCallback(async (file: File) => {
     const allowedExtensions = ["xlsx", "xls", "csv"];
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const fileExt = file.name.split(".").pop()?.toLowerCase();
 
     if (!fileExt || !allowedExtensions.includes(fileExt)) {
       setModal({
-        isOpen: true,
-        type: "error",
+        isOpen: true, type: "error",
         title: "Format Berkas Ditolak",
         message: "Format file tidak didukung! Harap unggah berkas Excel (.xlsx/.xls) atau CSV (.csv).",
       });
-      if (e.target) e.target.value = "";
       return;
     }
 
@@ -117,51 +121,62 @@ export default function InputForm({
 
     try {
       setUploading(true);
-
-      // 1. Dapatkan Sesi Pengguna Terotentikasi
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Akses ditolak. Sila login kembali.");
 
-      // 2. Format Jalur & Nama Berkas Unik
-      const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+      const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
       const filePath = `${session.user.id}/${Date.now()}_${cleanFileName}`;
 
-      // 3. Simpan File Fisik ke Supabase Storage Bucket
       const { error: uploadError } = await supabase.storage
         .from("carbon-files")
         .upload(filePath, file);
-
       if (uploadError) throw uploadError;
 
-      // 4. Kirim ke Backend Spreadsheet Parser untuk Ekstraksi Data
-      const result = await importEmissionFile(file);
-      
-      // Ambil array ekstraksi baris data
+      const result = await importEmissionFile(file, selectedReference);
       const extractedRows = result.detail || result.rawExtractedRows || result.data || [];
 
-      // 5. Pemicu Fungsi Utama di Dashboard untuk Simpan Data
       await onImportSuccess(result, extractedRows, file.name, filePath, file.size);
-      
+
       setModal({
-        isOpen: true,
-        type: "success",
+        isOpen: true, type: "success",
         title: "Import Berhasil",
-        message: `Berkas "${file.name}" sukses diunggah ke storage dan diekstrak ke dashboard.`,
+        message: `Berkas "${file.name}" sukses diunggah dan diekstrak ke dashboard.`,
       });
-      setSelectedFile(null); // Reset selection setelah berhasil masuk database
+      setSelectedFile(null);
     } catch (error: any) {
       console.error(error);
       setModal({
-        isOpen: true,
-        type: "error",
+        isOpen: true, type: "error",
         title: "Import Gagal",
         message: error.message || "Struktur data dokumen tidak valid atau rusak.",
       });
       setSelectedFile(null);
     } finally {
       setUploading(false);
-      if (e.target) e.target.value = ""; // Reset input file target
     }
+  }, [selectedReference, onImportSuccess]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processFile(file);
+    if (e.target) e.target.value = "";
+  };
+
+  // ── Drag & Drop handlers ────────────────────────────────────────────────────
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) await processFile(file);
   };
 
   const handleClearFile = (e: React.MouseEvent) => {
@@ -176,15 +191,12 @@ export default function InputForm({
       { No: 2, Periode: "2026-05-01", Scope: "Scope 2", "Kategori Aktivitas": "Listrik PLN", "Detail / Keterangan": "Gedung Kantor", Jumlah: 1250, Satuan: "kWh" },
       { No: 3, Periode: "2026-05-02", Scope: "Scope 3", "Kategori Aktivitas": "Pesawat Domestik", "Detail / Keterangan": "Jakarta-Surabaya", Jumlah: 780, Satuan: "Km" },
     ];
-
     const worksheet = XLSX.utils.json_to_sheet(templateData);
     worksheet["!cols"] = [{ wch: 8 }, { wch: 18 }, { wch: 15 }, { wch: 28 }, { wch: 35 }, { wch: 15 }, { wch: 12 }];
-
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Template Emisi");
     const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
     const fileData = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" });
-
     saveAs(fileData, "template_emisi.xlsx");
   };
 
@@ -204,15 +216,85 @@ export default function InputForm({
   const scope2Options = ACTIVITY_OPTIONS.filter((item) => item.scope === "Scope 2 (Indirect - Energy)");
   const scope3Options = ACTIVITY_OPTIONS.filter((item) => item.scope === "Scope 3 (Value Chain)");
 
+  const currentRefMeta = REFERENCE_METADATA[selectedReference];
+
+  // ── Referensi Selector ─────────────────────────────────────────────────────
+  const ReferenceSelector = () => (
+    <div className="px-6 pt-5 pb-4 border-b border-gray-200 bg-gradient-to-b from-gray-50 to-white">
+      <div className="flex items-center gap-2 mb-3">
+        <BookOpen size={14} className="text-gray-500" />
+        <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Referensi Faktor Emisi</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {REFERENCE_ORDER.map((ref) => {
+          const meta = REFERENCE_METADATA[ref];
+          const isActive = selectedReference === ref;
+          return (
+            <button
+              key={ref}
+              onClick={() => onReferenceChange(ref)}
+              className={`
+                relative py-2 px-2 rounded-md text-[11px] font-bold border transition-all text-center leading-tight
+                ${isActive
+                  ? `${meta.badge} border-current shadow-sm ring-1 ring-offset-1 ring-current/20`
+                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700"
+                }
+              `}
+            >
+              {meta.shortLabel}
+            </button>
+          );
+        })}
+      </div>
+      <div className={`mt-3 rounded-lg border px-3 py-2.5 ${currentRefMeta.badge}`}>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[11px] leading-relaxed font-medium flex-1">{currentRefMeta.description}</p>
+          <a href={currentRefMeta.url} target="_blank" rel="noopener noreferrer"
+            className="shrink-0 mt-0.5 opacity-60 hover:opacity-100 transition" title="Buka sumber referensi">
+            <ExternalLink size={12} />
+          </a>
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {currentRefMeta.scopeCoverage.map((sc) => (
+            <span key={sc} className="text-[10px] font-semibold bg-white/60 px-1.5 py-0.5 rounded">{sc}</span>
+          ))}
+        </div>
+        <p className="text-[10px] mt-1 opacity-70">Diperbarui: {currentRefMeta.lastUpdated}</p>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden relative">
-      <div className="border-b border-gray-100">
-        <div className="flex">
-          <button onClick={() => setActiveTab("manual")} className={`flex-1 py-4 text-sm font-semibold transition ${activeTab === "manual" ? "bg-emerald-50 text-emerald-700 border-b-2 border-emerald-500" : "text-gray-500 hover:bg-gray-50"}`}>Manual Input</button>
-          <button onClick={() => setActiveTab("import")} className={`flex-1 py-4 text-sm font-semibold transition ${activeTab === "import" ? "bg-emerald-50 text-emerald-700 border-b-2 border-emerald-500" : "text-gray-500 hover:bg-gray-50"}`}>Import File</button>
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden relative">
+      {/* Tab switcher */}
+      <div className="bg-gradient-to-b from-gray-50 to-white border-b border-gray-200">
+        <div className="flex gap-0.5 p-2">
+          <button
+            onClick={() => setActiveTab("manual")}
+            className={`flex-1 py-3 px-4 text-sm font-semibold rounded-md transition duration-200 ${
+              activeTab === "manual"
+                ? "bg-white text-emerald-700 border border-emerald-200 shadow-sm"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+            }`}
+          >
+            Manual Input
+          </button>
+          <button
+            onClick={() => setActiveTab("import")}
+            className={`flex-1 py-3 px-4 text-sm font-semibold rounded-md transition duration-200 ${
+              activeTab === "import"
+                ? "bg-white text-emerald-700 border border-emerald-200 shadow-sm"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+            }`}
+          >
+            Import File
+          </button>
         </div>
       </div>
 
+      <ReferenceSelector />
+
+      {/* ── MANUAL TAB ────────────────────────────────────────────────────── */}
       {activeTab === "manual" && (
         <div className="p-6 space-y-4">
           <div className="flex items-center gap-2">
@@ -220,53 +302,114 @@ export default function InputForm({
             <h2 className="text-lg font-bold text-gray-900">Input Aktivitas Emisi</h2>
           </div>
 
-          <div className="max-h-[58vh] overflow-y-auto pr-1 space-y-4 scrollbar-thin scrollbar-thumb-gray-200">
+          <div className="max-h-[58vh] overflow-y-auto pr-1 space-y-3 scrollbar-thin scrollbar-thumb-gray-200">
             {inputs.map((input, index) => {
               const selected = ACTIVITY_OPTIONS.find((item) => item.value === input.aktivitas);
+              const factorResult = selected ? getEmissionFactor(selected, selectedReference) : null;
+
               return (
-                <div key={index} className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-4">
+                <div key={index} className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg">Aktivitas #{index + 1}</span>
-                      {selected && <span className="flex items-center gap-1 text-xs text-gray-500">{getCategoryIcon(selected.category)}{selected.category}</span>}
+                      <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
+                        Aktivitas #{index + 1}
+                      </span>
+                      {selected && (
+                        <span className="flex items-center gap-1 text-xs text-gray-500">
+                          {getCategoryIcon(selected.category)}{selected.category}
+                        </span>
+                      )}
                     </div>
                     {inputs.length > 1 && (
-                      <button onClick={() => onRemove(index)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition"><Trash2 size={16} /></button>
+                      <button onClick={() => onRemove(index)} className="text-red-500 hover:bg-red-50 p-2 rounded transition">
+                        <Trash2 size={16} />
+                      </button>
                     )}
                   </div>
 
+                  {/* Tahun aktivitas — full width */}
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-gray-600 flex items-center gap-1"><Calendar size={12} className="text-gray-400" />Periode / Tanggal Aktivitas</label>
-                    <input type="date" value={input.periode || ""} onChange={(e) => onChange(index, "periode", e.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition" />
+                    <label className="text-xs font-semibold text-gray-600">Tahun Aktivitas</label>
+                    <div className="relative w-full datepicker-wrapper">
+                      <DatePicker
+                        selected={input.periode ? new Date(Number(input.periode), 0, 1) : null}
+                        onChange={(date: Date | null) => {
+                          if (date) onChange(index, "periode", date.getFullYear().toString());
+                        }}
+                        showYearPicker
+                        dateFormat="yyyy"
+                        placeholderText="Pilih Tahun Aktivitas"
+                        wrapperClassName="w-full"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 pr-10 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      />
+                      <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-gray-600">Jenis Aktivitas</label>
-                    <select value={input.aktivitas} onChange={(e) => onChange(index, "aktivitas", e.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                      <optgroup label="Scope 1 — Direct Emission">{scope1Options.map((o) => <option key={o.value} value={o.value}>{o.label} • {o.unit}</option>)}</optgroup>
-                      <optgroup label="Scope 2 — Energy Indirect">{scope2Options.map((o) => <option key={o.value} value={o.value}>{o.label} • {o.unit}</option>)}</optgroup>
-                      <optgroup label="Scope 3 — Value Chain">{scope3Options.map((o) => <option key={o.value} value={o.value}>{o.label} • {o.unit}</option>)}</optgroup>
+                    <select
+                      value={input.aktivitas}
+                      onChange={(e) => onChange(index, "aktivitas", e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    >
+                      <optgroup label="Scope 1 — Direct Emission">
+                        {scope1Options.map((o) => <option key={o.value} value={o.value}>{o.label} • {o.unit}</option>)}
+                      </optgroup>
+                      <optgroup label="Scope 2 — Energy Indirect">
+                        {scope2Options.map((o) => <option key={o.value} value={o.value}>{o.label} • {o.unit}</option>)}
+                      </optgroup>
+                      <optgroup label="Scope 3 — Value Chain">
+                        {scope3Options.map((o) => <option key={o.value} value={o.value}>{o.label} • {o.unit}</option>)}
+                      </optgroup>
                     </select>
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-gray-600">Detail Aktivitas</label>
-                    <input type="text" placeholder="Contoh: Mobil Operasional Avanza" value={input.detail_aktivitas} onChange={(e) => onChange(index, "detail_aktivitas", e.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                    <input
+                      type="text"
+                      placeholder="Contoh: Mobil Operasional Avanza"
+                      value={input.detail_aktivitas}
+                      onChange={(e) => onChange(index, "detail_aktivitas", e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-gray-600">Jumlah Aktivitas</label>
                     <div className="relative">
-                      <input type="number" placeholder="Masukkan jumlah aktivitas" value={input.jumlah === 0 ? "" : input.jumlah} onChange={(e) => onChange(index, "jumlah", e.target.value === "" ? 0 : Number(e.target.value))} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                      {selected && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">{selected.unit}</span>}
+                      <input
+                        type="number"
+                        placeholder="Masukkan jumlah aktivitas"
+                        value={input.jumlah === 0 ? "" : input.jumlah}
+                        onChange={(e) => onChange(index, "jumlah", e.target.value === "" ? 0 : Number(e.target.value))}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      />
+                      {selected && (
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">
+                          {selected.unit}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {selected && (
-                    <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
-                      <div className="text-xs font-medium text-emerald-800">{ACTIVITY_LABELS[input.aktivitas] || selected.label}</div>
+                  {selected && factorResult && (
+                    <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-medium text-emerald-800">
+                          {ACTIVITY_LABELS[input.aktivitas] || selected.label}
+                        </div>
+                        {factorResult.isFallback && factorResult.usedRef && (
+                          <span className="text-[10px] bg-white/70 text-emerald-700 px-1.5 py-0.5 rounded font-semibold whitespace-nowrap">
+                            ↩ {factorResult.usedRef}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[11px] text-emerald-700 mt-1">Scope: {selected.scope}</div>
-                      <div className="text-[11px] text-emerald-700">Faktor Emisi: {selected.factor} kgCO₂e/{selected.unit}</div>
+                      <div className="text-[11px] text-emerald-700">
+                        Faktor Emisi ({selectedReference}): {factorResult.value} kgCO₂e/{selected.unit}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -274,46 +417,104 @@ export default function InputForm({
             })}
           </div>
 
-          <button onClick={onAdd} className="w-full border-2 border-dashed border-emerald-300 rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition"><Plus size={16} />Tambah Aktivitas</button>
-          <button onClick={onSubmit} disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl py-3 font-semibold shadow-sm transition disabled:opacity-50">{loading ? "Menghitung..." : "Hitung Emisi"}</button>
+          <button
+            onClick={onAdd}
+            className="w-full border-2 border-dashed border-emerald-300 rounded-lg py-3 flex items-center justify-center gap-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition"
+          >
+            <Plus size={16} />Tambah Aktivitas
+          </button>
+          <button
+            onClick={onSubmit}
+            disabled={loading}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-3 font-semibold shadow-sm transition disabled:opacity-50"
+          >
+            {loading ? "Menghitung..." : "Hitung Emisi"}
+          </button>
         </div>
       )}
 
+      {/* ── IMPORT TAB ────────────────────────────────────────────────────── */}
       {activeTab === "import" && (
-        <div className="p-6">
-          <div className="flex items-center gap-2 mb-4">
+        <div className="p-6 space-y-5">
+          <div className="flex items-center gap-2">
             <Upload size={18} className="text-emerald-600" />
             <h2 className="text-lg font-bold text-gray-900">Import Excel / CSV</h2>
           </div>
 
-          {selectedFile ? (
-            <div className="flex flex-col items-center justify-center gap-3 border-2 border-solid border-emerald-500 bg-emerald-50/30 rounded-2xl p-8 transition">
-              <div className="flex gap-3"><FileSpreadsheet className="text-emerald-600" /></div>
+          {/* Drop Zone */}
+          <label
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`
+              flex flex-col items-center justify-center gap-4
+              border-2 rounded-lg p-10 cursor-pointer transition-all
+              ${selectedFile
+                ? "border-solid border-emerald-500 bg-emerald-50/40"
+                : isDragging
+                  ? "border-solid border-emerald-400 bg-emerald-50 scale-[1.01]"
+                  : "border-dashed border-emerald-300 bg-white hover:bg-emerald-50 hover:border-emerald-400"
+              }
+            `}
+          >
+            <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors
+              ${isDragging ? "bg-emerald-500" : "bg-emerald-100"}`}>
+              <FileSpreadsheet className={`w-7 h-7 ${isDragging ? "text-white" : "text-emerald-600"}`} />
+            </div>
+
+            {selectedFile ? (
               <div className="text-center">
-                <p className="text-xs text-gray-400 font-medium">File Terpilih:</p>
-                <div onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-2 bg-white text-emerald-800 px-3 py-1.5 rounded-xl border border-emerald-200 text-sm font-bold shadow-sm mt-1">
+                <p className="text-xs text-gray-400 font-medium mb-2">File Terpilih:</p>
+                <div
+                  onClick={(e) => e.preventDefault()}
+                  className="inline-flex items-center gap-2 bg-white text-emerald-800 px-3 py-2 rounded-lg border border-emerald-200 text-sm font-bold shadow-sm"
+                >
                   <span>{selectedFile.name}</span>
-                  <button onClick={handleClearFile} className="text-gray-400 hover:text-red-600 ml-1 transition p-0.5 hover:bg-gray-100 rounded-md" title="Hapus File"><X size={14} /></button>
+                  <button
+                    onClick={handleClearFile}
+                    className="text-gray-400 hover:text-red-600 ml-1 transition p-0.5 hover:bg-gray-100 rounded"
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
               </div>
-            </div>
-          ) : (
-            <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-emerald-300 rounded-2xl p-8 cursor-pointer hover:bg-emerald-50 transition bg-white relative">
-              <div className="flex gap-3"><FileSpreadsheet className="text-emerald-600" /></div>
+            ) : (
               <div className="text-center">
-                <p className="text-sm font-semibold text-gray-800">Upload File Excel atau CSV</p>
-                <p className="text-xs text-gray-500 mt-1">.xlsx .xls .csv</p>
+                <p className="text-sm font-semibold text-gray-800">
+                  {isDragging ? "Lepaskan file di sini..." : "Drag & drop file atau klik untuk upload"}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Format: .xlsx · .xls · .csv</p>
               </div>
-              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" disabled={uploading} onChange={handleFileUpload} />
-            </label>
+            )}
+
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              disabled={uploading}
+              onChange={handleFileUpload}
+            />
+          </label>
+
+          {uploading && (
+            <div className="flex items-center gap-2 text-sm text-emerald-700 font-medium bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+              <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+              Sedang memproses & mengekstrak berkas...
+            </div>
           )}
 
-          <div className="mt-5 bg-gray-50 border border-gray-200 rounded-2xl p-4">
+          {/* Format dokumen + template */}
+          <div className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-sm font-bold text-gray-900">Format Dokumen</h4>
-              <button onClick={downloadTemplateExcel} className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition"><Download size={14} />Download Template</button>
+              <button
+                onClick={downloadTemplateExcel}
+                className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition"
+              >
+                <Download size={14} />Download Template
+              </button>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-gray-200">
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-emerald-50 text-gray-700">
@@ -327,27 +528,42 @@ export default function InputForm({
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="bg-white"><td className="px-3 py-2 border-b">1</td><td className="px-3 py-2 border-b">2026-05-01</td><td className="px-3 py-2 border-b">Scope 1</td><td className="px-3 py-2 border-b">Pertalite</td><td className="px-3 py-2 border-b">Mobil Dinas</td><td className="px-3 py-2 border-b">45.5</td><td className="px-3 py-2 border-b">Liter</td></tr>
-                  <tr className="bg-gray-50"><td className="px-3 py-2 border-b">2</td><td className="px-3 py-2 border-b">2026-05-01</td><td className="px-3 py-2 border-b">Scope 2</td><td className="px-3 py-2 border-b">Listrik PLN</td><td className="px-3 py-2 border-b">Gedung</td><td className="px-3 py-2 border-b">1250</td><td className="px-3 py-2 border-b">kWh</td></tr>
+                  <tr className="bg-white">
+                    <td className="px-3 py-2 border-b">1</td><td className="px-3 py-2 border-b">2026-05-01</td>
+                    <td className="px-3 py-2 border-b">Scope 1</td><td className="px-3 py-2 border-b">Pertalite</td>
+                    <td className="px-3 py-2 border-b">Mobil Dinas</td><td className="px-3 py-2 border-b">45.5</td>
+                    <td className="px-3 py-2 border-b">Liter</td>
+                  </tr>
+                  <tr className="bg-gray-50">
+                    <td className="px-3 py-2 border-b">2</td><td className="px-3 py-2 border-b">2026-05-01</td>
+                    <td className="px-3 py-2 border-b">Scope 2</td><td className="px-3 py-2 border-b">Listrik PLN</td>
+                    <td className="px-3 py-2 border-b">Gedung</td><td className="px-3 py-2 border-b">1250</td>
+                    <td className="px-3 py-2 border-b">kWh</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
           </div>
 
-          <div className="mt-5 border-t border-gray-100 pt-4 space-y-3">
+          {/* Riwayat file */}
+          <div className="border-t border-gray-100 pt-4 space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Riwayat File Terupload</h4>
-              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full">{importedFiles.length} Berkas</span>
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full">
+                {importedFiles.length} Berkas
+              </span>
             </div>
 
             {importedFiles.length === 0 ? (
-              <div className="text-center py-6 border border-dashed border-gray-200 rounded-xl bg-gray-50/50"><p className="text-xs text-gray-400">Belum ada riwayat dokumen terunggah.</p></div>
+              <div className="text-center py-6 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                <p className="text-xs text-gray-400">Belum ada riwayat dokumen terunggah.</p>
+              </div>
             ) : (
               <div className="max-h-[24vh] overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-gray-200">
                 {importedFiles.map((file) => (
-                  <div key={file.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl hover:border-emerald-400 transition shadow-sm gap-4">
+                  <div key={file.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-emerald-400 transition shadow-sm gap-4">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 bg-gray-50 rounded-lg shrink-0">
+                      <div className="p-2 bg-gray-50 rounded shrink-0">
                         <FileSpreadsheet size={16} className="text-emerald-600" />
                       </div>
                       <div className="min-w-0">
@@ -359,13 +575,16 @@ export default function InputForm({
                         </p>
                       </div>
                     </div>
-                    
                     <div className="flex items-center gap-1">
                       {onDownloadFile && (
-                        <button onClick={() => onDownloadFile(file.file_path, file.file_name)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition"><Download size={14} /></button>
+                        <button onClick={() => onDownloadFile(file.file_path, file.file_name)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition">
+                          <Download size={14} />
+                        </button>
                       )}
                       {onDeleteFile && (
-                        <button onClick={() => onDeleteFile(file.id, file.file_path)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition"><Trash2 size={14} /></button>
+                        <button onClick={() => onDeleteFile(file.id, file.file_path)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition">
+                          <Trash2 size={14} />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -373,22 +592,22 @@ export default function InputForm({
               </div>
             )}
           </div>
-
-          {uploading && (
-            <div className="mt-4 flex items-center gap-2 text-sm text-emerald-700 font-medium bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-              <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-              Sedang memproses & mengekstrak berkas...
-            </div>
-          )}
         </div>
       )}
 
-      {/* MODAL NOTIFIKASI */}
+      {/* Modal notifikasi */}
       {modal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/20 backdrop-blur-[2px]">
-          <div className="bg-white rounded-2xl p-6 shadow-2xl max-w-xs w-full text-center space-y-3 border border-gray-100">
-            <div className="flex justify-center">{modal.type === "success" ? <CheckCircle className="text-emerald-500" size={44} /> : <XCircle className="text-red-500" size={44} />}</div>
-            <div className="space-y-1"><h3 className="text-sm font-bold text-gray-900">{modal.title}</h3><p className="text-xs text-gray-500 leading-relaxed">{modal.message}</p></div>
+          <div className="bg-white rounded-lg p-6 shadow-2xl max-w-xs w-full text-center space-y-3 border border-gray-100">
+            <div className="flex justify-center">
+              {modal.type === "success"
+                ? <CheckCircle className="text-emerald-500" size={44} />
+                : <XCircle className="text-red-500" size={44} />}
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-gray-900">{modal.title}</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">{modal.message}</p>
+            </div>
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 export interface InputRow {
   aktivitas: string;
   detail_aktivitas: string;
-  periode?: string;
+  periode: number;
   jumlah: number;
 }
 
@@ -15,7 +15,7 @@ export interface ChartItem {
 export interface DetailOutput {
   aktivitas: string;
   detail_aktivitas?: string;
-  periode?: string;
+  periode: number;
   scope: string;
   jumlah: number;
   satuan: string;

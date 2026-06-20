@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="100%" height="100%" fill="none">
+  <defs>
+    <linearGradient id="emisikuGrad" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399" /> <stop offset="100%" stop-color="#059669" /> </linearGradient>
+  </defs>
+
+  <rect width="32" height="32" rx="8" fill="url(#emisikuGrad)" />
+
+  <path 
+    d="M16 7C11.03 7 7 11.03 7 16C7 20.97 11.03 25 16 25C20.42 25 24.1 21.82 24.84 17.6H21.22C20.55 19.86 18.47 21.5 16 21.5C12.96 21.5 10.5 19.04 10.5 16C10.5 12.96 12.96 10.5 16 10.5C18.47 10.5 20.55 12.14 21.22 14.4H24.84C24.1 10.18 20.42 7 16 7Z" 
+    fill="#FFFFFF" 
+  />
+  
+  <circle cx="16" cy="16" r="2.5" fill="#A7F3D0" />
+</svg>

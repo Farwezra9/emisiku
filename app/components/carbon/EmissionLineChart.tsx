@@ -14,7 +14,7 @@ import {
 
 interface DetailOutput {
   scope: string;
-  periode?: string;
+  periode: number;
   emisi_tCO2e: number;
 }
 
@@ -27,28 +27,28 @@ export default function EmissionLineChart({ detail }: Props) {
   const formattedData = useMemo(() => {
     const group: Record<string, { name: string; "Scope 1": number; "Scope 2": number; "Scope 3": number }> = {};
 
-    detail.forEach((item) => {
-      // Jika periode kosong, default ke "Tanpa Periode"
-      const periode = item.periode && item.periode.trim() !== "" ? item.periode : "Lainnya";
-      
-      if (!group[periode]) {
-        group[periode] = {
-          name: periode,
-          "Scope 1": 0,
-          "Scope 2": 0,
-          "Scope 3": 0,
-        };
-      }
+   detail.forEach((item) => {
+  const periode = item.periode
+    ? String(item.periode)
+    : "Lainnya";
 
-      // Deteksi scope untuk dimasukkan ke sub-properti chart
-      if (item.scope.includes("Scope 1")) {
-        group[periode]["Scope 1"] += item.emisi_tCO2e;
-      } else if (item.scope.includes("Scope 2")) {
-        group[periode]["Scope 2"] += item.emisi_tCO2e;
-      } else if (item.scope.includes("Scope 3")) {
-        group[periode]["Scope 3"] += item.emisi_tCO2e;
-      }
-    });
+  if (!group[periode]) {
+    group[periode] = {
+      name: periode,
+      "Scope 1": 0,
+      "Scope 2": 0,
+      "Scope 3": 0,
+    };
+  }
+
+  if (item.scope.includes("Scope 1")) {
+    group[periode]["Scope 1"] += item.emisi_tCO2e;
+  } else if (item.scope.includes("Scope 2")) {
+    group[periode]["Scope 2"] += item.emisi_tCO2e;
+  } else if (item.scope.includes("Scope 3")) {
+    group[periode]["Scope 3"] += item.emisi_tCO2e;
+  }
+});
 
     // Urutkan berdasarkan string periode agar urut secara kronologis di chart
     return Object.values(group).sort((a, b) => a.name.localeCompare(b.name));

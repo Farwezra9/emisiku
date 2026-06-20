@@ -14,7 +14,7 @@ import {
 
 interface DetailOutput {
   scope: string;
-  periode?: string;
+  periode: number;
   emisi_tCO2e: number;
 }
 
@@ -28,7 +28,10 @@ export default function EmissionStackedChart({ detail }: Props) {
     const group: Record<string, { name: string; "Scope 1": number; "Scope 2": number; "Scope 3": number }> = {};
 
     detail.forEach((item) => {
-      const periode = item.periode && item.periode.trim() !== "" ? item.periode : "Lainnya";
+  const periode = item.periode
+    ? String(item.periode)
+    : "Lainnya";
+
       
       if (!group[periode]) {
         group[periode] = {
