@@ -325,15 +325,6 @@ export default function DashboardPage() {
 
             {/* Tabel */}
             <div className="min-w-0 space-y-4">
-              <div className="flex justify-end">
-                <button
-                  onClick={handleNavigateAnalysis}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-sm transition"
-                >
-                  <BarChart2 size={15} />
-                  Lihat Analisis &amp; Chart
-                </button>
-              </div>
               <EmissionTable
                 detail={resultData.detail}
                 onDeleteAllRecords={handleDeleteAllRecords}
