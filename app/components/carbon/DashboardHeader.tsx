@@ -57,10 +57,10 @@ export default function DashboardHeader({
           className="flex items-center gap-2 shrink-0 group"
         >
           <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center group-hover:bg-emerald-600 transition-colors">
-            <Leaf className="text-white w-3.5 h-3.5" />
+           <img src="/emisiku.svg" alt="Logo Emisiku" className="w-4 h-4" />
           </div>
           <span className="font-bold text-[15px] text-emerald-800 tracking-tight">
-            Carbon Tracker
+            Emisiku
           </span>
         </button>
 

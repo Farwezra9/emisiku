@@ -25,6 +25,7 @@ import {
   BookOpen,
   ExternalLink,
   BookText,
+  AlertCircle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -70,6 +71,45 @@ interface Props {
 
 const REFERENCE_ORDER: ReferenceKey[] = ["ESDM", "IPCC", "DEFRA"];
 
+// ── Validasi Input Manual ─────────────────────────────────────────────────
+// Field wajib: Tahun (periode), Detail Aktivitas, dan Jumlah (> 0).
+// "Jenis Aktivitas" tidak divalidasi karena <select> selalu punya nilai
+// default ("listrik_pln"), jadi secara teknis tidak pernah "kosong".
+interface FieldErrorMap {
+  [index: number]: {
+    periode?: boolean;
+    detail?: boolean;
+    jumlah?: boolean;
+  };
+}
+
+function validateInputs(rows: InputRow[]): { errors: FieldErrorMap; messages: string[] } {
+  const errors: FieldErrorMap = {};
+  const messages: string[] = [];
+
+  rows.forEach((row, idx) => {
+    const rowErr: FieldErrorMap[number] = {};
+    const baris = idx + 1;
+
+    if (!row.periode || Number(row.periode) === 0) {
+      rowErr.periode = true;
+      messages.push(`Baris #${baris}: Tahun aktivitas belum dipilih.`);
+    }
+    if (!row.detail_aktivitas || row.detail_aktivitas.trim() === "") {
+      rowErr.detail = true;
+      messages.push(`Baris #${baris}: Detail aktivitas belum diisi.`);
+    }
+    if (!row.jumlah || Number(row.jumlah) <= 0) {
+      rowErr.jumlah = true;
+      messages.push(`Baris #${baris}: Jumlah aktivitas harus lebih besar dari 0.`);
+    }
+
+    if (Object.keys(rowErr).length > 0) errors[idx] = rowErr;
+  });
+
+  return { errors, messages };
+}
+
 export default function InputForm({
   inputs,
   loading,
@@ -88,6 +128,7 @@ export default function InputForm({
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrorMap>({});
 
   const [modal, setModal] = useState<{
     isOpen: boolean;
@@ -103,6 +144,53 @@ export default function InputForm({
     }
   }, [modal.isOpen]);
 
+  // ── Helper: bersihkan flag error satu field tertentu saat user mengisinya ──
+  const clearFieldError = (index: number, field: "periode" | "detail" | "jumlah") => {
+    setFieldErrors((prev) => {
+      if (!prev[index]?.[field]) return prev;
+      const nextRow = { ...prev[index], [field]: false };
+      return { ...prev, [index]: nextRow };
+    });
+  };
+
+  // Index baris bergeser tiap kali baris ditambah/dihapus → reset semua flag
+  // error supaya tidak ada highlight merah "menempel" di baris yang salah.
+  const handleAddRow = () => {
+    setFieldErrors({});
+    onAdd();
+  };
+  const handleRemoveRow = (index: number) => {
+    setFieldErrors({});
+    onRemove(index);
+  };
+
+  // ── Submit manual dengan validasi ───────────────────────────────────────
+  const handleSubmitClick = () => {
+    if (inputs.length === 0) {
+      setModal({
+        isOpen: true, type: "error",
+        title: "Data Kosong",
+        message: "Tambahkan minimal satu aktivitas sebelum menghitung emisi.",
+      });
+      return;
+    }
+
+    const { errors, messages } = validateInputs(inputs);
+    setFieldErrors(errors);
+
+    if (messages.length > 0) {
+      setModal({
+        isOpen: true,
+        type: "error",
+        title: "Data Belum Lengkap",
+        message: messages.join("\n"),
+      });
+      return;
+    }
+
+    onSubmit();
+  };
+
   // ── Process uploaded file ──────────────────────────────────────────────────
   const processFile = useCallback(async (file: File) => {
     const allowedExtensions = ["xlsx", "xls", "csv"];
@@ -117,6 +205,16 @@ export default function InputForm({
       return;
     }
 
+    // Tolak berkas 0 byte sebelum sempat diproses sama sekali.
+    if (file.size === 0) {
+      setModal({
+        isOpen: true, type: "error",
+        title: "Berkas Kosong",
+        message: `Berkas "${file.name}" berukuran 0 byte (kosong) dan tidak dapat diproses.`,
+      });
+      return;
+    }
+
     setSelectedFile(file);
 
     try {
@@ -124,6 +222,23 @@ export default function InputForm({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Akses ditolak. Sila login kembali.");
 
+      // 1) Ekstraksi DULU, sebelum upload ke storage. Kalau hasilnya kosong,
+      //    kita berhenti di sini — tidak ada file "yatim" tersimpan di storage
+      //    tanpa record terkait, dan tidak ada notifikasi "sukses" yang palsu.
+      const result = await importEmissionFile(file, selectedReference);
+      const extractedRows = result.detail || result.rawExtractedRows || result.data || [];
+
+      if (!extractedRows || extractedRows.length === 0) {
+        setModal({
+          isOpen: true, type: "error",
+          title: "Tidak Ada Data Ditemukan",
+          message: `Berkas "${file.name}" berhasil dibaca, tetapi tidak ada baris data aktivitas emisi yang valid di dalamnya. Pastikan format sesuai template dan kolom "Jumlah" lebih besar dari 0.`,
+        });
+        setSelectedFile(null);
+        return;
+      }
+
+      // 2) Baru upload ke storage setelah dipastikan ada datanya.
       const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
       const filePath = `${session.user.id}/${Date.now()}_${cleanFileName}`;
 
@@ -132,15 +247,12 @@ export default function InputForm({
         .upload(filePath, file);
       if (uploadError) throw uploadError;
 
-      const result = await importEmissionFile(file, selectedReference);
-      const extractedRows = result.detail || result.rawExtractedRows || result.data || [];
-
       await onImportSuccess(result, extractedRows, file.name, filePath, file.size);
 
       setModal({
         isOpen: true, type: "success",
         title: "Import Berhasil",
-        message: `Berkas "${file.name}" sukses diunggah dan diekstrak ke dashboard.`,
+        message: `Berkas "${file.name}" sukses diunggah dan diekstrak (${extractedRows.length} baris data) ke dashboard.`,
       });
       setSelectedFile(null);
     } catch (error: any) {
@@ -306,6 +418,7 @@ export default function InputForm({
             {inputs.map((input, index) => {
               const selected = ACTIVITY_OPTIONS.find((item) => item.value === input.aktivitas);
               const factorResult = selected ? getEmissionFactor(selected, selectedReference) : null;
+              const rowErr = fieldErrors[index] || {};
 
               return (
                 <div key={index} className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-lg p-4 space-y-3">
@@ -321,7 +434,7 @@ export default function InputForm({
                       )}
                     </div>
                     {inputs.length > 1 && (
-                      <button onClick={() => onRemove(index)} className="text-red-500 hover:bg-red-50 p-2 rounded transition">
+                      <button onClick={() => handleRemoveRow(index)} className="text-red-500 hover:bg-red-50 p-2 rounded transition">
                         <Trash2 size={16} />
                       </button>
                     )}
@@ -329,21 +442,35 @@ export default function InputForm({
 
                   {/* Tahun aktivitas — full width */}
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-gray-600">Tahun Aktivitas</label>
+                    <label className="text-xs font-semibold text-gray-600">
+                      Tahun Aktivitas <span className="text-red-500">*</span>
+                    </label>
                     <div className="relative w-full datepicker-wrapper">
                       <DatePicker
                         selected={input.periode ? new Date(Number(input.periode), 0, 1) : null}
                         onChange={(date: Date | null) => {
-                          if (date) onChange(index, "periode", date.getFullYear().toString());
+                          if (date) {
+                            onChange(index, "periode", date.getFullYear().toString());
+                            clearFieldError(index, "periode");
+                          }
                         }}
                         showYearPicker
                         dateFormat="yyyy"
                         placeholderText="Pilih Tahun Aktivitas"
                         wrapperClassName="w-full"
-                        className="w-full rounded-lg border border-gray-300 bg-white px-4 pr-10 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        className={`w-full rounded-lg border px-4 pr-10 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:border-emerald-500 ${
+                          rowErr.periode
+                            ? "border-red-400 focus:ring-red-400 bg-red-50/40"
+                            : "border-gray-300 focus:ring-emerald-500"
+                        }`}
                       />
                       <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
+                    {rowErr.periode && (
+                      <p className="text-[11px] text-red-500 flex items-center gap-1 mt-1">
+                        <AlertCircle size={11} /> Tahun aktivitas wajib diisi.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1">
@@ -366,25 +493,49 @@ export default function InputForm({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-gray-600">Detail Aktivitas</label>
+                    <label className="text-xs font-semibold text-gray-600">
+                      Detail Aktivitas <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
                       placeholder="Contoh: Mobil Operasional Avanza"
                       value={input.detail_aktivitas}
-                      onChange={(e) => onChange(index, "detail_aktivitas", e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      onChange={(e) => {
+                        onChange(index, "detail_aktivitas", e.target.value);
+                        if (e.target.value.trim() !== "") clearFieldError(index, "detail");
+                      }}
+                      className={`w-full rounded-lg border px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:border-emerald-500 ${
+                        rowErr.detail
+                          ? "border-red-400 focus:ring-red-400 bg-red-50/40"
+                          : "border-gray-300 focus:ring-emerald-500"
+                      }`}
                     />
+                    {rowErr.detail && (
+                      <p className="text-[11px] text-red-500 flex items-center gap-1 mt-1">
+                        <AlertCircle size={11} /> Detail aktivitas wajib diisi.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-gray-600">Jumlah Aktivitas</label>
+                    <label className="text-xs font-semibold text-gray-600">
+                      Jumlah Aktivitas <span className="text-red-500">*</span>
+                    </label>
                     <div className="relative">
                       <input
                         type="number"
                         placeholder="Masukkan jumlah aktivitas"
                         value={input.jumlah === 0 ? "" : input.jumlah}
-                        onChange={(e) => onChange(index, "jumlah", e.target.value === "" ? 0 : Number(e.target.value))}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        onChange={(e) => {
+                          const val = e.target.value === "" ? 0 : Number(e.target.value);
+                          onChange(index, "jumlah", val);
+                          if (val > 0) clearFieldError(index, "jumlah");
+                        }}
+                        className={`w-full rounded-lg border px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:border-emerald-500 ${
+                          rowErr.jumlah
+                            ? "border-red-400 focus:ring-red-400 bg-red-50/40"
+                            : "border-gray-300 focus:ring-emerald-500"
+                        }`}
                       />
                       {selected && (
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">
@@ -392,6 +543,11 @@ export default function InputForm({
                         </span>
                       )}
                     </div>
+                    {rowErr.jumlah && (
+                      <p className="text-[11px] text-red-500 flex items-center gap-1 mt-1">
+                        <AlertCircle size={11} /> Jumlah harus lebih besar dari 0.
+                      </p>
+                    )}
                   </div>
 
                   {selected && factorResult && (
@@ -418,13 +574,13 @@ export default function InputForm({
           </div>
 
           <button
-            onClick={onAdd}
+            onClick={handleAddRow}
             className="w-full border-2 border-dashed border-emerald-300 rounded-lg py-3 flex items-center justify-center gap-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition"
           >
             <Plus size={16} />Tambah Aktivitas
           </button>
           <button
-            onClick={onSubmit}
+            onClick={handleSubmitClick}
             disabled={loading}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-3 font-semibold shadow-sm transition disabled:opacity-50"
           >
@@ -606,7 +762,7 @@ export default function InputForm({
             </div>
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-gray-900">{modal.title}</h3>
-              <p className="text-xs text-gray-500 leading-relaxed">{modal.message}</p>
+              <p className="text-xs text-gray-500 leading-relaxed whitespace-pre-line">{modal.message}</p>
             </div>
           </div>
         </div>

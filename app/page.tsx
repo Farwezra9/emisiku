@@ -13,17 +13,17 @@ export default function Home() {
         
         {/* Badge Info Kecil */}
         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 mb-6 text-xs font-medium text-emerald-800 bg-emerald-100/80 backdrop-blur-sm rounded-full border border-emerald-200/50 shadow-sm animate-fade-in">
-          🌱 Next-Gen GHG Accounting
+          🌱 Emisiku
         </span>
 
         {/* Judul Utama yang Responsif */}
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-slate-900 mb-4 leading-tight sm:leading-none">
-          Carbon <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Intelligence</span> System
+          Carbon <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Calculator</span> System
         </h1>
         
         {/* Deskripsi */}
         <p className="text-base sm:text-lg md:text-xl text-gray-500 max-w-xl mb-8 leading-relaxed px-2">
-          Hitung, lacak, dan kategorisasi emisi GRK (Scope 1, 2, & 3) Anda secara otomatis dan akurat dalam satu platform cerdas.
+          Hitung, lacak, dan kategorisasi emisi GRK (Scope 1, 2, & 3) Anda secara otomatis dan akurat dalam satu platform.
         </p>
         
         {/* Tombol Aksi yang Responsif (Menumpuk di HP, Berjejer di Desktop) */}

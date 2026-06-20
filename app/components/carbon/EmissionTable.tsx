@@ -34,6 +34,32 @@ function resolveKategori(aktivitas: string): string {
   return ACTIVITY_OPTIONS.find((o) => o.value === aktivitas)?.category ?? aktivitas;
 }
 
+// Helper — tentukan Energy_Type per Activity_ID (dipakai di Dim_Activity)
+// Helper — tentukan Energy_Type per Activity_ID
+// Prioritas: kategori eksplisit "Renewable Energy" dari ACTIVITY_OPTIONS,
+// fallback ke cek faktor emisi (untuk aktivitas renewable lain yang tidak dikategorikan eksplisit).
+function getActivityEnergyType(aktivitas: string): "Renewable" | "Non-Renewable" {
+  const activity = ACTIVITY_OPTIONS.find((a) => a.value === aktivitas);
+  if (!activity) return "Non-Renewable";
+
+  if (activity.category === "Renewable Energy") return "Renewable";
+
+  const nonNullFactors = FACTOR_REF_ORDER
+    .map((r) => activity.factors[r])
+    .filter((f): f is number => f !== null);
+  const hasZeroFactor = nonNullFactors.some((f) => f === 0);
+
+  return hasZeroFactor ? "Renewable" : "Non-Renewable";
+}
+
+// Helper — tentukan nomor & deskripsi scope (dipakai di Dim_Scope)
+function getScopeMeta(scope: string): { number: number; description: string } {
+  if (scope.includes("1")) return { number: 1, description: "Direct Emissions" };
+  if (scope.includes("2")) return { number: 2, description: "Indirect Emissions - Purchased Energy" };
+  if (scope.includes("3")) return { number: 3, description: "Other Indirect Emissions (Value Chain)" };
+  return { number: 0, description: "Unknown" };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DETEKSI REFERENSI
 // ─────────────────────────────────────────────────────────────────────────────
@@ -129,17 +155,17 @@ function setColWidths(ws: XLSX.WorkSheet, widths: number[]) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EXPORT KE TABLEAU-READY XLSX (4 sheet)
+// EXPORT KE TABLEAU-READY XLSX — SKEMA RELATIONSHIPS (Fact + 2 Dim, 3 sheet)
 // ─────────────────────────────────────────────────────────────────────────────
 function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey) {
   const wb = XLSX.utils.book_new();
 
-  // ── Pra-proses baris ──────────────────────────────────────────────────────
-  const processed = data.map((row) => {
+  // ── SHEET 1: Fact_Emissions — grain 1 baris per record aktivitas ──────────
+  const factRows = data.map((row, i) => {
     let faktor = row.faktor_konversi ?? 0;
     if (faktor > 0 && faktor < 0.01) faktor *= 1000;
 
-    const emisiKg  = row.emisi_tCO2e * 1000;
+    const emisiKg = row.emisi_tCO2e * 1000;
     const { ref, isZeroEmission } = detectReference(row.aktivitas, faktor, emisiKg, selectedReference);
     const refLabel = isZeroEmission ? "Zero-Emission" : ref ? REF_SHORT[ref] : "Unknown";
 
@@ -147,181 +173,80 @@ function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey)
     const yearMatch   = periodeStr.match(/\b(19|20)\d{2}\b/);
     const periodeYear = yearMatch ? Number(yearMatch[0]) : null;
 
-    const scopeNum = row.scope?.includes("1") ? 1 : row.scope?.includes("2") ? 2 : 3;
-
-    // ✅ Gunakan resolveKategori() — tidak bergantung pada row.kategori
-    const kategori = resolveKategori(row.kategori);
-
     return {
-      raw: {
-        "No":                              0, // diisi nanti
-        "Activity_ID":                     row.aktivitas,
-        "Activity_Name":                   ACTIVITY_LABELS[row.aktivitas] ?? row.aktivitas,
-        "Activity_Detail":                 row.detail_aktivitas ?? "",
-        "Scope":                           row.scope ?? "",
-        "Scope_Number":                    scopeNum,
-        "Category":                        kategori,   // ✅ dari ACTIVITY_OPTIONS
-        "Period_Year":                     periodeYear,
-        "Unit":                            row.satuan ?? "",
-        "Quantity":                        row.jumlah,
-        "Emission_Factor_kgCO2e_per_unit": Number(faktor.toFixed(6)),
-        "Emission_kgCO2e":                 Number(emisiKg.toFixed(4)),
-        "Emission_tCO2e":                  Number(row.emisi_tCO2e.toFixed(6)),
-        "Is_Zero_Emission":                isZeroEmission ? "Yes" : "No",
-        "Energy_Type":                     isZeroEmission ? "Renewable" : "Non-Renewable",
-        "Reference_Source":                refLabel,
-        "Data_Source":                     row.file_name ?? "Manual Input",
-      },
-      scope:   row.scope ?? "Unknown",
-      scopeNum,
-      year:    periodeYear,
-      kgCO2e:  Number(emisiKg.toFixed(4)),
-      tCO2e:   Number(row.emisi_tCO2e.toFixed(6)),
-      isZero:  isZeroEmission,
-      kategori,  // ✅ disimpan untuk sheet Renewable_vs_NonRenewable
+      "Record_ID":                       i + 1,
+      "Activity_ID":                     row.aktivitas,              // FK -> Dim_Activity.Activity_ID
+      "Activity_Detail":                 row.detail_aktivitas ?? "",
+      "Scope":                           row.scope ?? "Unknown",     // FK -> Dim_Scope.Scope
+      "Period_Year":                     periodeYear,
+      "Unit":                            row.satuan ?? "",
+      "Quantity":                        row.jumlah,
+      "Emission_Factor_kgCO2e_per_unit": Number(faktor.toFixed(6)),
+      "Emission_kgCO2e":                 Number(emisiKg.toFixed(4)),
+      "Emission_tCO2e":                  Number(row.emisi_tCO2e.toFixed(6)),
+      "Is_Zero_Emission":                isZeroEmission ? "Yes" : "No",
+      "Reference_Source":                refLabel,
+      "Data_Source":                     row.file_name ?? "Manual Input",
     };
   });
 
-  // ── SHEET 1: Raw_Data ─────────────────────────────────────────────────────
-  const rawRows = processed.map((p, i) => ({ ...p.raw, "No": i + 1 }));
-  const ws1 = XLSX.utils.json_to_sheet(rawRows);
-  setColWidths(ws1, [6, 24, 32, 32, 22, 14, 18, 12, 10, 12, 30, 16, 16, 16, 16, 18, 24]);
-  XLSX.utils.book_append_sheet(wb, ws1, "Raw_Data");
+  const ws1 = XLSX.utils.json_to_sheet(factRows);
+  setColWidths(ws1, [10, 24, 32, 22, 12, 10, 12, 30, 16, 16, 16, 18, 24]);
+  XLSX.utils.book_append_sheet(wb, ws1, "Emissions");
 
-  // ── SHEET 2: Summary_by_Scope ─────────────────────────────────────────────
-  const scopeAccum: Record<string, { kg: number; t: number; count: number }> = {};
-  processed.forEach((p) => {
-    if (!scopeAccum[p.scope]) scopeAccum[p.scope] = { kg: 0, t: 0, count: 0 };
-    scopeAccum[p.scope].kg    += p.kgCO2e;
-    scopeAccum[p.scope].t     += p.tCO2e;
-    scopeAccum[p.scope].count += 1;
-  });
+  // ── SHEET 2: Dim_Activity — 1 baris per Activity_ID unik ──────────────────
+  const uniqueActivityIds = Array.from(new Set(data.map((row) => row.aktivitas)));
+  const dimActivity = uniqueActivityIds
+    .sort((a, b) => a.localeCompare(b))
+    .map((aktivitasId) => ({
+      "Activity_ID":   aktivitasId,
+      "Activity_Name": ACTIVITY_LABELS[aktivitasId] ?? aktivitasId,
+      "Category":      resolveKategori(aktivitasId),
+      "Energy_Type":   getActivityEnergyType(aktivitasId),
+    }));
 
-  const scopeOrder = ["Scope 1", "Scope 2", "Scope 3"];
-  const sortedScopes = Object.keys(scopeAccum).sort((a, b) => {
-    const ia = scopeOrder.findIndex((s) => a.includes(s));
-    const ib = scopeOrder.findIndex((s) => b.includes(s));
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-  });
+  const ws2 = XLSX.utils.json_to_sheet(dimActivity);
+  setColWidths(ws2, [24, 32, 22, 16]);
+  XLSX.utils.book_append_sheet(wb, ws2, "Category");
 
-  const totalKg = processed.reduce((s, p) => s + p.kgCO2e, 0);
-  const totalT  = processed.reduce((s, p) => s + p.tCO2e,  0);
+  // ── SHEET 3: Dim_Scope — 1 baris per Scope unik ────────────────────────────
+  // ── SHEET 3: Dim_Scope — 1 baris per Scope unik + total agregat ───────────
+  const totalAllKg = data.reduce((s, r) => s + r.emisi_tCO2e * 1000, 0);
 
-  const summaryByScope = [
-    ...sortedScopes.map((scope) => ({
-      "Scope":                 scope,
-      "Total_Records":         scopeAccum[scope].count,
-      "Total_Emission_kgCO2e": Number(scopeAccum[scope].kg.toFixed(4)),
-      "Total_Emission_tCO2e":  Number(scopeAccum[scope].t.toFixed(6)),
-      "Percentage_%":          Number(((scopeAccum[scope].t / totalT) * 100).toFixed(2)),
-      "Row_Type":              "Scope",
-    })),
-    {
-      "Scope":                 "GRAND TOTAL",
-      "Total_Records":         processed.length,
-      "Total_Emission_kgCO2e": Number(totalKg.toFixed(4)),
-      "Total_Emission_tCO2e":  Number(totalT.toFixed(6)),
-      "Percentage_%":          100,
-      "Row_Type":              "Total",
-    },
-  ];
-  const ws2 = XLSX.utils.json_to_sheet(summaryByScope);
-  setColWidths(ws2, [32, 14, 24, 22, 14, 12]);
-  XLSX.utils.book_append_sheet(wb, ws2, "Summary_by_Scope");
+  const uniqueScopes = Array.from(new Set(data.map((row) => row.scope ?? "Unknown")));
+  const dimScope = uniqueScopes
+    .sort((a, b) => a.localeCompare(b))
+    .map((scope) => {
+      const meta = getScopeMeta(scope);
+      const rowsInScope = data.filter((r) => (r.scope ?? "Unknown") === scope);
+      const totalKg = rowsInScope.reduce((s, r) => s + r.emisi_tCO2e * 1000, 0);
+      const totalT  = rowsInScope.reduce((s, r) => s + r.emisi_tCO2e, 0);
 
-  // ── SHEET 3: Summary_by_Year ──────────────────────────────────────────────
-  const yearScopeMap: Record<string, { kg: number; t: number; count: number }> = {};
-  processed.forEach((p) => {
-    const key = `${p.year ?? "Unknown"}|||${p.scope}`;
-    if (!yearScopeMap[key]) yearScopeMap[key] = { kg: 0, t: 0, count: 0 };
-    yearScopeMap[key].kg    += p.kgCO2e;
-    yearScopeMap[key].t     += p.tCO2e;
-    yearScopeMap[key].count += 1;
-  });
-
-  const summaryByYear = Object.entries(yearScopeMap)
-    .map(([key, val]) => {
-      const [year, scope] = key.split("|||");
       return {
-        "Period_Year":           year === "null" ? "Unknown" : Number(year),
         "Scope":                 scope,
-        "Total_Records":         val.count,
-        "Total_Emission_kgCO2e": Number(val.kg.toFixed(4)),
-        "Total_Emission_tCO2e":  Number(val.t.toFixed(6)),
+        "Scope_Number":          meta.number,
+        "Scope_Description":     meta.description,
+        "Total_Records":         rowsInScope.length,
+        "Total_Emission_kgCO2e": Number(totalKg.toFixed(4)),
+        "Total_Emission_tCO2e":  Number(totalT.toFixed(6)),
+        "Percentage_of_Total_%": totalAllKg > 0 ? Number(((totalKg / totalAllKg) * 100).toFixed(2)) : 0,
       };
-    })
-    .sort((a, b) => {
-      if (a.Period_Year !== b.Period_Year) return String(a.Period_Year).localeCompare(String(b.Period_Year));
-      return String(a.Scope).localeCompare(String(b.Scope));
     });
 
-  const ws3 = XLSX.utils.json_to_sheet(summaryByYear);
-  setColWidths(ws3, [14, 32, 14, 24, 22]);
-  XLSX.utils.book_append_sheet(wb, ws3, "Summary_by_Year");
-
-  // ── SHEET 4: Renewable_vs_NonRenewable ────────────────────────────────────
-  let zeroKg = 0, zeroT = 0, zeroCount = 0;
-  let nonKg  = 0, nonT  = 0, nonCount  = 0;
-
-  processed.forEach((p) => {
-    if (p.isZero) { zeroKg += p.kgCO2e; zeroT += p.tCO2e; zeroCount++; }
-    else          { nonKg  += p.kgCO2e; nonT  += p.tCO2e; nonCount++;  }
+  // Baris GRAND TOTAL di bawah Scope 1–3
+  dimScope.push({
+    "Scope":                 "GRAND TOTAL",
+    "Scope_Number":          0,
+    "Scope_Description":     "All Scopes",
+    "Total_Records":         data.length,
+    "Total_Emission_kgCO2e": Number(totalAllKg.toFixed(4)),
+    "Total_Emission_tCO2e":  Number(data.reduce((s, r) => s + r.emisi_tCO2e, 0).toFixed(6)),
+    "Percentage_of_Total_%": 100,
   });
 
-  // ✅ Gunakan p.kategori (sudah di-resolve dari ACTIVITY_OPTIONS di atas)
-  const categoryRenew: Record<string, { kg: number; t: number; count: number; isZero: boolean }> = {};
-  processed.forEach((p) => {
-    const cat = p.kategori || "Other";
-    if (!categoryRenew[cat]) categoryRenew[cat] = { kg: 0, t: 0, count: 0, isZero: p.isZero };
-    categoryRenew[cat].kg    += p.kgCO2e;
-    categoryRenew[cat].t     += p.tCO2e;
-    categoryRenew[cat].count += 1;
-  });
-
-  const renewableRows = [
-    {
-      "Energy_Type":           "Renewable (Zero-Emission)",
-      "Category":              "ALL",
-      "Total_Records":         zeroCount,
-      "Total_Emission_kgCO2e": Number(zeroKg.toFixed(4)),
-      "Total_Emission_tCO2e":  Number(zeroT.toFixed(6)),
-      "Percentage_of_Total_%": totalT > 0 ? Number(((zeroT / totalT) * 100).toFixed(2)) : 0,
-      "Row_Type":              "Summary",
-    },
-    {
-      "Energy_Type":           "Non-Renewable",
-      "Category":              "ALL",
-      "Total_Records":         nonCount,
-      "Total_Emission_kgCO2e": Number(nonKg.toFixed(4)),
-      "Total_Emission_tCO2e":  Number(nonT.toFixed(6)),
-      "Percentage_of_Total_%": totalT > 0 ? Number(((nonT / totalT) * 100).toFixed(2)) : 0,
-      "Row_Type":              "Summary",
-    },
-    {
-      "Energy_Type":           "GRAND TOTAL",
-      "Category":              "ALL",
-      "Total_Records":         processed.length,
-      "Total_Emission_kgCO2e": Number(totalKg.toFixed(4)),
-      "Total_Emission_tCO2e":  Number(totalT.toFixed(6)),
-      "Percentage_of_Total_%": 100,
-      "Row_Type":              "Total",
-    },
-    ...Object.entries(categoryRenew)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([cat, val]) => ({
-        "Energy_Type":           val.isZero ? "Renewable (Zero-Emission)" : "Non-Renewable",
-        "Category":              cat,
-        "Total_Records":         val.count,
-        "Total_Emission_kgCO2e": Number(val.kg.toFixed(4)),
-        "Total_Emission_tCO2e":  Number(val.t.toFixed(6)),
-        "Percentage_of_Total_%": totalT > 0 ? Number(((val.t / totalT) * 100).toFixed(2)) : 0,
-        "Row_Type":              "Detail",
-      })),
-  ];
-
-  const ws4 = XLSX.utils.json_to_sheet(renewableRows);
-  setColWidths(ws4, [28, 22, 14, 24, 22, 22, 12]);
-  XLSX.utils.book_append_sheet(wb, ws4, "Renewable_vs_NonRenewable");
+  const ws3 = XLSX.utils.json_to_sheet(dimScope);
+  setColWidths(ws3, [32, 14, 36, 14, 24, 22, 22]);
+  XLSX.utils.book_append_sheet(wb, ws3, "Scope");
 
   // ── Tulis file ────────────────────────────────────────────────────────────
   const buf  = XLSX.write(wb, { bookType: "xlsx", type: "array" });
@@ -531,13 +456,16 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
 
               {showTableauInfo && (
                 <div className="absolute right-0 top-full mt-2 w-72 bg-gray-900 text-white text-[11px] rounded-xl p-3 z-50 shadow-xl leading-relaxed">
-                  <p className="font-semibold mb-1.5">Format Tableau-Ready (.xlsx) — 4 Sheet</p>
+                  <p className="font-semibold mb-1.5">Format Tableau Relationships (.xlsx) — 3 Sheet</p>
                   <div className="space-y-1 text-gray-300">
-                    <p><span className="text-white font-medium">① Raw_Data</span> — data mentah per baris aktivitas</p>
-                    <p><span className="text-white font-medium">② Summary_by_Scope</span> — total kgCO₂e & tCO₂e per scope</p>
-                    <p><span className="text-white font-medium">③ Summary_by_Year</span> — total per tahun per scope</p>
-                    <p><span className="text-white font-medium">④ Renewable_vs_NonRenewable</span> — perbandingan energi terbarukan vs non</p>
+                    <p><span className="text-white font-medium">① Fact_Emissions</span> — data transaksi, 1 baris per record aktivitas</p>
+                    <p><span className="text-white font-medium">② Dim_Activity</span> — master aktivitas (key: Activity_ID)</p>
+                    <p><span className="text-white font-medium">③ Dim_Scope</span> — master scope (key: Scope)</p>
                   </div>
+                  <p className="text-gray-400 mt-2 pt-2 border-t border-gray-700">
+                    Di Tableau, hubungkan via canvas <strong>Relationships</strong>: Fact_Emissions.Activity_ID ↔ Dim_Activity.Activity_ID,
+                    dan Fact_Emissions.Scope ↔ Dim_Scope.Scope.
+                  </p>
                 </div>
               )}
             </div>
@@ -773,9 +701,10 @@ function TableauEmbedSection() {
         <div className="mx-6 mt-4 bg-blue-50 border border-blue-100 rounded-xl p-4 text-[12px] text-blue-800 space-y-2">
           <p className="font-bold text-[13px]">Cara integrasi dengan Tableau Public:</p>
           <ol className="list-decimal list-inside space-y-1.5 text-blue-700">
-            <li>Klik <strong>Export Tableau</strong> di tabel atas untuk download file <code>.xlsx</code> Tableau-ready (4 sheet).</li>
+            <li>Klik <strong>Export Tableau</strong> di tabel atas untuk download file <code>.xlsx</code> (Fact_Emissions + Dim_Activity + Dim_Scope).</li>
             <li>Buka <a href="https://public.tableau.com" target="_blank" rel="noopener noreferrer" className="underline font-semibold">Tableau Public</a> → login → <strong>Create → Web Authoring</strong>.</li>
             <li>Upload file <code>Tableau_GHG_Emission_*.xlsx</code> sebagai data source.</li>
+            <li>Di canvas <strong>Relationships</strong>, hubungkan: <code>Fact_Emissions.Activity_ID</code> ↔ <code>Dim_Activity.Activity_ID</code>, dan <code>Fact_Emissions.Scope</code> ↔ <code>Dim_Scope.Scope</code>.</li>
             <li>Buat viz/dashboard, lalu klik <strong>Publish</strong>.</li>
             <li>Buka viz yang sudah dipublish → <strong>Share</strong> → salin <strong>Link</strong>.</li>
             <li>Tempel URL di kotak input di bawah → klik <strong>Tampilkan</strong>.</li>
