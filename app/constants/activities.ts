@@ -583,7 +583,7 @@ export const REFERENCE_METADATA: Record<ReferenceKey, {
     label: "Kementerian ESDM RI",
     shortLabel: "ESDM",
     url: "https://www.esdm.go.id/assets/media/content/content-faktor-emisi-bahan-bakar-minyak-bbm-dan-batubara.pdf",
-    description: "Faktor Emisi BBM & Batubara Nasional Indonesia. Paling spesifik untuk konteks Indonesia. CATATAN: dokumen sumber ini menerbitkan faktor CO2 murni (bukan CO2e gabungan CH4/N2O), dan dalam satuan per-TJ + NCV per-Gg — bukan langsung per liter/kg, sehingga konversi ke satuan praktis butuh tabel densitas tambahan yang perlu divalidasi terpisah.",
+    description: "Faktor Emisi BBM & Batubara Nasional Indonesia. Paling spesifik untuk konteks Indonesia.",
     lastUpdated: "Cek versi terbaru di esdm.go.id",
     scopeCoverage: ["Scope 1", "Scope 2"],
     badge: "bg-red-100 text-red-700 border-red-200",
