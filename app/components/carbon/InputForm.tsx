@@ -685,14 +685,14 @@ export default function InputForm({
                 </thead>
                 <tbody>
                   <tr className="bg-white">
-                    <td className="px-3 py-2 border-b">1</td><td className="px-3 py-2 border-b">2026-05-01</td>
+                    <td className="px-3 py-2 border-b">1</td><td className="px-3 py-2 border-b">2026</td>
                     <td className="px-3 py-2 border-b">Scope 1</td><td className="px-3 py-2 border-b">Pertalite</td>
                     <td className="px-3 py-2 border-b">Mobil Dinas</td><td className="px-3 py-2 border-b">45.5</td>
                     <td className="px-3 py-2 border-b">Liter</td>
                   </tr>
                   <tr className="bg-gray-50">
-                    <td className="px-3 py-2 border-b">2</td><td className="px-3 py-2 border-b">2026-05-01</td>
-                    <td className="px-3 py-2 border-b">Scope 2</td><td className="px-3 py-2 border-b">Listrik PLN</td>
+                    <td className="px-3 py-2 border-b">2</td><td className="px-3 py-2 border-b">2026</td>
+                    <td className="px-3 py-2 border-b">Scope 2</td><td className="px-3 py-2 border-b">Listrik PLN Grid Jamali</td>
                     <td className="px-3 py-2 border-b">Gedung</td><td className="px-3 py-2 border-b">1250</td>
                     <td className="px-3 py-2 border-b">kWh</td>
                   </tr>

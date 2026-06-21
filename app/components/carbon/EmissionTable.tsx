@@ -457,13 +457,13 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
                 <div className="absolute right-0 top-full mt-2 w-72 bg-gray-900 text-white text-[11px] rounded-xl p-3 z-50 shadow-xl leading-relaxed">
                   <p className="font-semibold mb-1.5">Format Tableau Relationships (.xlsx) — 3 Sheet</p>
                   <div className="space-y-1 text-gray-300">
-                    <p><span className="text-white font-medium">① Fact_Emissions</span> — data transaksi, 1 baris per record aktivitas</p>
-                    <p><span className="text-white font-medium">② Dim_Activity</span> — master aktivitas (key: Activity_ID)</p>
-                    <p><span className="text-white font-medium">③ Dim_Scope</span> — master scope (key: Scope)</p>
+                    <p><span className="text-white font-medium">① Emissions</span> — data transaksi, 1 baris per record aktivitas</p>
+                    <p><span className="text-white font-medium">② Activity</span> — master aktivitas (key: Activity_ID)</p>
+                    <p><span className="text-white font-medium">③ Scope</span> — master scope (key: Scope)</p>
                   </div>
                   <p className="text-gray-400 mt-2 pt-2 border-t border-gray-700">
-                    Di Tableau, hubungkan via canvas <strong>Relationships</strong>: Fact_Emissions.Activity_ID ↔ Dim_Activity.Activity_ID,
-                    dan Fact_Emissions.Scope ↔ Dim_Scope.Scope.
+                    Di Tableau, hubungkan via canvas <strong>Relationships</strong>: Emissions.Activity_ID ↔ Activity.Activity_ID,
+                    dan Emissions.Scope ↔ Scope.Scope.
                   </p>
                 </div>
               )}
