@@ -18,15 +18,14 @@ import { DetailOutput } from "@/app/types/carbon";
 import { downloadLaporanExcel } from "@/app/utils/excelUtils";
 
 // ─────────────────────────────────────────────────────────────────────────────
-const FACTOR_REF_ORDER: ReferenceKey[] = ["ESDM", "IPCC", "DEFRA"];
+const FACTOR_REF_ORDER: ReferenceKey[] = ["ESDM", "DEFRA"];
 const EPSILON = 0.0005;
 
 const REF_BADGE: Record<ReferenceKey, string> = {
   ESDM:  "bg-red-100 text-red-700 border-red-200",
-  IPCC:  "bg-blue-100 text-blue-700 border-blue-200",
   DEFRA: "bg-purple-100 text-purple-700 border-purple-200",
 };
-const REF_SHORT: Record<ReferenceKey, string> = { ESDM: "ESDM", IPCC: "IPCC", DEFRA: "DEFRA" };
+const REF_SHORT: Record<ReferenceKey, string> = { ESDM: "ESDM", DEFRA: "DEFRA" };
 
 // Helper — resolve kategori dari ACTIVITY_OPTIONS berdasarkan value aktivitas
 // Ini sumber kebenaran tunggal; tidak bergantung pada field `kategori` di DB.
@@ -417,7 +416,7 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
 
   if (detail.length === 0) return null;
 
-  const legendRefs: ReferenceKey[] = ["ESDM", "IPCC", "DEFRA"];
+  const legendRefs: ReferenceKey[] = ["ESDM", "DEFRA"];
 
   return (
     <div className="space-y-6">
@@ -503,7 +502,7 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
 
         {/* Legenda */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-4 px-1">
-          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Legenda Ref.:</span>
+          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Ref.:</span>
           {legendRefs.map((ref) => (
             <span key={ref} className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border ${REF_BADGE[ref]}`} title={REFERENCE_METADATA[ref].label}>
               {REF_SHORT[ref]}

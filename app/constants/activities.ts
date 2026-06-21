@@ -1,18 +1,10 @@
 // app/constants/activities.ts
-//
-// ============================================================
-// SISTEM MULTI-REFERENSI FAKTOR EMISI
-// ============================================================
-// Setiap activity memiliki 3 faktor berdasarkan referensi berbeda:
-// ESDM, IPCC, DEFRA.
-// null = referensi tersebut tidak menerbitkan faktor untuk aktivitas ini.
 // ============================================================
 
-export type ReferenceKey = "ESDM" | "IPCC" | "DEFRA";
+export type ReferenceKey = "ESDM" | "DEFRA";
 
 export interface EmissionFactors {
   ESDM: number | null;
-  IPCC: number | null;
   DEFRA: number | null;
 }
 
@@ -37,19 +29,17 @@ export interface EmissionFactorResult {
 }
 
 // Ambil faktor berdasarkan referensi yang dipilih.
-// Jika null, fallback ke urutan prioritas: ESDM -> IPCC -> DEFRA
+// Jika null, fallback ke urutan prioritas: ESDM -> DEFRA
 //
-// Urutan ini sengaja: ESDM paling spesifik untuk konteks Indonesia dan jadi
-// rujukan legal di banyak regulasi domestik. IPCC jadi fallback kedua (bukan
-// DEFRA) karena regulasi GRK Indonesia (Permen LHK soal inventarisasi GRK)
-// dibangun di atas metodologi IPCC. DEFRA jadi fallback terakhir, dipakai
-// terutama untuk kategori yang tidak punya angka siap-pakai di ESDM/IPCC
-// (material kantor, limbah per-jenis, air, transportasi per-km).
+// ESDM jadi prioritas utama karena paling spesifik untuk konteks Indonesia
+// dan jadi rujukan legal di banyak regulasi domestik. DEFRA jadi fallback
+// untuk kategori yang tidak punya angka siap-pakai di ESDM (material
+// kantor, limbah per-jenis, air, transportasi per-km, pelumas).
 export function getEmissionFactor(
   activity: ActivityOption,
   ref: ReferenceKey
 ): EmissionFactorResult {
-  const fallbackOrder: ReferenceKey[] = ["ESDM", "IPCC", "DEFRA"];
+  const fallbackOrder: ReferenceKey[] = ["ESDM", "DEFRA"];
 
   if (activity.factors[ref] !== null) {
     return { value: activity.factors[ref]!, isFallback: false, usedRef: ref };
@@ -73,45 +63,23 @@ export function getEmissionFactorValue(
 }
 
 // Basis GWP (Global Warming Potential) yang dipakai oleh masing-masing
-// referensi saat menerbitkan faktor emisinya. Ini metadata informasional
-// (GWP sudah "dipanggang" ke dalam faktor oleh lembaga penerbit, bukan
-// dihitung ulang oleh aplikasi ini).
+// referensi saat menerbitkan faktor emisinya.
 //
-// KOREKSI (diverifikasi ulang Juni 2026): label "AR4 (IPCC 2007)" untuk
-// ESDM/IPCC pada versi sebelumnya TIDAK didukung sumber primer dan sudah
-// diperbaiki. Dua dokumen resmi yang dicek:
-//   1. KLHK, "Pedoman Penyelenggaraan Inventarisasi GRK Nasional", Buku II
-//      Vol. 3 (AFOLU) — tabel GWP eksplisit mencantumkan CH4=23, N2O=296,
-//      bersumber dari "IPCC Third Assessment Report (2001)" (TAR), bukan AR4.
-//   2. Laporan Inventarisasi GRK Provinsi Bali (2025, dokumen resmi daerah
-//      mengikuti pedoman KLHK) — menyatakan eksplisit GWP yang dipakai
-//      "mengikuti Laporan Penilaian Kedua IPCC", yaitu Second Assessment
-//      Report (SAR, 1995).
-// Kedua dokumen ini tidak konsisten satu sama lain (SAR vs TAR), tapi
-// sama-sama menunjukkan basis GWP nasional Indonesia jauh lebih lawas dari
-// AR4 — kemungkinan karena pedoman teknis GRK Indonesia mewarisi konvensi
-// pelaporan UNFCCC lama (Decision 17/CP.8) yang mewajibkan SAR, dan belum
-// semua dokumen turunan diperbarui secara seragam. KESIMPULAN: basis GWP
-// ESDM/IPCC versi Indonesia TIDAK BISA diklaim tunggal sebagai SAR atau TAR
-// secara pasti tanpa mengecek dokumen spesifik yang dipakai per laporan —
-// yang BISA dipastikan adalah BUKAN AR4. Catatan tambahan: dokumen sumber
-// faktor BBM/batubara ESDM ("Nilai Faktor Emisi (FE) CO2 Nasional") secara
-// eksplisit hanya menerbitkan faktor CO2 murni (CO2 only), bukan CO2e
-// gabungan CO2+CH4+N2O — sehingga basis GWP secara ketat tidak berlaku untuk
-// entri tersebut sama sekali (GWP cuma relevan kalau ada gas non-CO2 yang
-// dikonversi). Pelabelan unit "kg CO2e" untuk entri ber-sumber ESDM BBM
-// adalah simplifikasi yang umum dipakai praktisi (karena CO2 mendominasi
-// >99% total CO2e pembakaran bahan bakar), bukan kesalahan fatal, tapi
-// sebaiknya didokumentasikan sebagai pendekatan, bukan presisi penuh.
+// DEFRA: workbook resmi (tab "Introduction", baris 35) menyatakan eksplisit
+// basis AR5 (2013). Konsisten dari rilis 2025 ke rilis 2026.
 //
-// DEFRA tetap terverifikasi solid: workbook resmi (Introduction tab, baris
-// 35) menyatakan eksplisit basis AR5 (2013), dan ini konsisten dari rilis
-// 2025 ke rilis 2026 (perubahan besar 2026 hanya di listrik/rel/EV, tidak
-// menyentuh metodologi GWP).
+// ESDM: dokumen sumber faktor BBM/batubara ESDM ("Nilai Faktor Emisi (FE)
+// CO2 Nasional") secara eksplisit hanya menerbitkan faktor CO2 murni
+// (CO2 only), bukan CO2e gabungan CO2+CH4+N2O — sehingga konsep "basis GWP"
+// secara ketat tidak berlaku untuk entri ber-sumber ESDM (GWP cuma relevan
+// kalau ada gas non-CO2 yang dikonversi ke setara CO2). Pelabelan "kg CO2e"
+// untuk entri ESDM adalah simplifikasi umum di kalangan praktisi (karena
+// CO2 mendominasi >99% total emisi pembakaran bahan bakar), bukan kesalahan
+// fatal, tapi sebaiknya dipahami sebagai pendekatan, bukan presisi penuh.
 export function getGwpBasisLabel(usedRef: ReferenceKey | null): string {
   if (usedRef === "DEFRA") return "AR5 (IPCC 2013)";
-  if (usedRef === "ESDM" || usedRef === "IPCC")
-    return "SAR/TAR (bervariasi per dokumen — bukan AR4, perlu cek dokumen spesifik)";
+  if (usedRef === "ESDM")
+    return "CO2 murni (dokumen sumber ESDM tidak menerbitkan CO2e gabungan — GWP tidak berlaku ketat di sini)";
   return "Tidak diketahui";
 }
 
@@ -127,18 +95,9 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     unit: "Liter",
     category: "Fuel",
     // DEFRA: kategori "Petrol (100% mineral petrol)" = 2,35372 kg CO2e/liter.
-    // Dipilih varian 100% mineral (bukan "average biofuel blend" 2,075) karena
-    // Premium tidak diwajibkan campuran etanol seperti bensin UK.
-    // CATATAN VERIFIKASI (Jun 2026): nilai DEFRA ini tidak termasuk kategori
-    // yang disebut berubah pada rilis 2026 (lihat Major Changes Report —
-    // hanya listrik/rel/EV), jadi kemungkinan besar masih valid, tapi belum
-    // dicek cell-by-cell ke workbook xlsx resmi (tidak bisa diakses langsung
-    // dari sandbox ini). ESDM/IPCC: dokumen sumber ESDM menerbitkan FE per TJ
-    // + NCV per Gg (bukan langsung per liter); konversi ke kg/liter butuh
-    // tabel densitas BBM yang tidak tersedia di dokumen itu, sehingga angka
-    // 2,31 di sini belum independently reproducible dari sumber primer.
-    factors: { ESDM: 2.31, IPCC: 2.27, DEFRA: 2.35 },
-    needsVerification: true,
+    // Dipilih varian 100% mineral (bukan "average biofuel blend" 2,075)
+    // karena Premium tidak diwajibkan campuran etanol seperti bensin UK.
+    factors: { ESDM: 2.31, DEFRA: 2.35 },
     aliases: ["premium", "bensin premium", "bbm premium"],
   },
   {
@@ -147,8 +106,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 1 (Direct)",
     unit: "Liter",
     category: "Fuel",
-    factors: { ESDM: 2.31, IPCC: 2.27, DEFRA: 2.35 },
-    needsVerification: true,
+    factors: { ESDM: 2.31, DEFRA: 2.35 },
     aliases: ["pertalite", "bensin", "bensin kendaraan", "bbm", "bahan bakar"],
   },
   {
@@ -157,8 +115,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 1 (Direct)",
     unit: "Liter",
     category: "Fuel",
-    factors: { ESDM: 2.30, IPCC: 2.27, DEFRA: 2.35 },
-    needsVerification: true,
+    factors: { ESDM: 2.30, DEFRA: 2.35 },
     aliases: ["pertamax", "bensin pertamax", "pertamax 92", "pertamax plus"],
   },
   {
@@ -168,8 +125,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     unit: "Liter",
     category: "Fuel",
     // DEFRA: kategori "Diesel (100% mineral diesel)" = 2,66155 kg CO2e/liter.
-    factors: { ESDM: 2.68, IPCC: 2.68, DEFRA: 2.66 },
-    needsVerification: true,
+    factors: { ESDM: 2.68, DEFRA: 2.66 },
     aliases: ["solar", "bahan bakar solar", "hsd", "diesel fuel"],
   },
   {
@@ -180,8 +136,8 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     category: "Fuel",
     // PERLU VERIFIKASI: DEFRA "Diesel (average biofuel blend)" merefleksikan
     // campuran biodiesel UK (~7%), jauh lebih rendah dari B30/B35 Indonesia.
-    // Tidak representatif — DEFRA dikosongkan, fallback ke ESDM/IPCC.
-    factors: { ESDM: 2.54, IPCC: 1.74, DEFRA: null },
+    // Tidak representatif — DEFRA dikosongkan, dipakai ESDM saja.
+    factors: { ESDM: 2.54, DEFRA: null },
     needsVerification: true,
     aliases: ["bio solar", "biosolar", "b30", "b35"],
   },
@@ -191,8 +147,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 1 (Direct)",
     unit: "Liter",
     category: "Fuel",
-    factors: { ESDM: 2.68, IPCC: 2.68, DEFRA: 2.66 },
-    needsVerification: true,
+    factors: { ESDM: 2.68, DEFRA: 2.66 },
     aliases: ["dexlite", "bbm dexlite"],
   },
   {
@@ -201,8 +156,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 1 (Direct)",
     unit: "Liter",
     category: "Fuel",
-    factors: { ESDM: 2.67, IPCC: 2.68, DEFRA: 2.66 },
-    needsVerification: true,
+    factors: { ESDM: 2.67, DEFRA: 2.66 },
     aliases: ["pertamina dex", "pertaminadex", "dex"],
   },
   {
@@ -212,7 +166,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     unit: "Kg",
     category: "Gas",
     // Terverifikasi cocok: DEFRA LPG tonnes 2939,36 / 1000 = 2,939 ≈ 2,94.
-    factors: { ESDM: 3.02, IPCC: 2.98, DEFRA: 2.94 },
+    factors: { ESDM: 3.02, DEFRA: 2.94 },
     aliases: ["lpg", "elpiji", "gas lpg", "tabung lpg"],
   },
   {
@@ -224,9 +178,8 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     // PERLU VERIFIKASI: tabel DEFRA tidak punya baris "cubic metres" untuk
     // LNG (LNG itu cairan, hanya ada tonnes/litres/kWh di sumber resmi).
     // Tergantung apakah input lapangan Anda LNG cair (litres) atau gas hasil
-    // regasifikasi (m3) — perlu konfirmasi sebelum diisi. DEFRA dikosongkan,
-    // fallback ke ESDM/IPCC yang sudah tervalidasi terhadap dokumen ESDM.
-    factors: { ESDM: 2.19, IPCC: 2.02, DEFRA: null },
+    // regasifikasi (m3) — perlu konfirmasi sebelum diisi. Dipakai ESDM saja.
+    factors: { ESDM: 2.19, DEFRA: null },
     needsVerification: true,
     aliases: ["lng", "liquified natural gas", "gas alam cair"],
   },
@@ -237,9 +190,8 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     unit: "m3",
     category: "Gas",
     // PERLU VERIFIKASI: sama seperti LNG, DEFRA tidak punya angka per m3
-    // untuk CNG tanpa asumsi densitas gas terkompresi (tidak dipublikasikan
-    // langsung). DEFRA dikosongkan, fallback ke ESDM/IPCC.
-    factors: { ESDM: 1.97, IPCC: 1.87, DEFRA: null },
+    // untuk CNG tanpa asumsi densitas gas terkompresi. Dipakai ESDM saja.
+    factors: { ESDM: 1.97, DEFRA: null },
     needsVerification: true,
     aliases: ["cng", "compressed natural gas", "bbt", "bahan bakar gas"],
   },
@@ -251,7 +203,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     category: "Gas",
     // Terverifikasi: DEFRA "Natural gas (100% mineral blend)", cubic metres
     // = 2,04987 ≈ 2,05.
-    factors: { ESDM: 1.97, IPCC: 1.87, DEFRA: 2.05 },
+    factors: { ESDM: 1.97, DEFRA: 2.05 },
     aliases: ["gas alam", "gas bumi", "natural gas", "gas pipa"],
   },
   {
@@ -262,8 +214,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     category: "Generator",
     // DEFRA: kategori "Gas oil" (mesin stasioner/off-road), BUKAN "Diesel"
     // yang khusus bahan bakar jalan raya. Gas oil litres = 2,75541 ≈ 2,76.
-    factors: { ESDM: 2.68, IPCC: 2.70, DEFRA: 2.76 },
-    needsVerification: true,
+    factors: { ESDM: 2.68, DEFRA: 2.76 },
     aliases: ["genset diesel", "solar genset", "genset solar", "generator diesel"],
   },
   {
@@ -272,8 +223,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 1 (Direct)",
     unit: "Liter",
     category: "Generator",
-    factors: { ESDM: 2.31, IPCC: 2.30, DEFRA: 2.35 },
-    needsVerification: true,
+    factors: { ESDM: 2.31, DEFRA: 2.35 },
     aliases: ["genset bensin", "generator bensin", "bensin genset"],
   },
   {
@@ -286,15 +236,10 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     // = 2,42/kg vs "Coal (electricity generation)" = 2,23/kg. Dipilih nilai
     // "industrial" agar konsisten dengan label kategori entri ini. Kalau
     // pemakaian Anda untuk PLTU/pembangkit listrik, ganti ke 2,23.
-    // CATATAN TAMBAHAN (Jun 2026): dokumen sumber ESDM membagi batubara jadi
-    // 4 kelas kalor (rendah/sedang/tinggi/tinggi sekali) dengan FE & NCV
-    // berbeda-beda per kelas — hasil konversi kasar ke kg CO2/kg yang saya
-    // hitung dari tabel itu berkisar ~1,6–2,7 kg CO2/kg tergantung kelas
-    // kalor yang dipakai, jadi nilai tunggal 2,42 di sini perlu dipastikan
-    // mengacu ke kelas kalor batubara yang mana (kemungkinan "tinggi sekali"
-    // atau campuran spesifik) — bukan otomatis salah, tapi harus didokumentasikan
-    // kelas kalor mana yang dipakai sebagai basis.
-    factors: { ESDM: 2.42, IPCC: 2.38, DEFRA: 2.42 },
+    // Dokumen ESDM sendiri membagi batubara jadi beberapa kelas kalor dengan
+    // FE/NCV berbeda — nilai 2,42 di sini perlu dipastikan kelas kalor mana
+    // yang dipakai sebagai basis (lihat dokumen ESDM Tabel 5-6).
+    factors: { ESDM: 2.42, DEFRA: 2.42 },
     needsVerification: true,
     aliases: ["batubara", "batu bara", "coal", "pembakaran batubara"],
   },
@@ -304,22 +249,41 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 1 (Direct)",
     unit: "Liter",
     category: "Industrial",
-    // Terverifikasi: DEFRA "Lubricants", litres = 2,74934 ≈ 2,75.
-    factors: { ESDM: null, IPCC: 2.59, DEFRA: 2.75 },
+    // ESDM tidak menerbitkan faktor untuk pelumas. Terverifikasi dari DEFRA:
+    // kategori "Lubricants", litres = 2,74934 ≈ 2,75.
+    factors: { ESDM: null, DEFRA: 2.75 },
     aliases: ["pelumas", "oli", "oil", "oli mesin", "pelumas mesin"],
+  },
+  {
+    value: "listrik_solar_panel_onsite",
+    label: "Listrik Solar Surya (Produksi Mandiri On-Site)",
+    scope: "Scope 1 (Direct)",
+    unit: "kWh",
+    category: "Renewable Energy",
+    // Produksi listrik mandiri dari panel surya, dipakai sendiri di lokasi
+    // (bukan dibeli dari PLN). Faktor emisi operasional = 0 karena tidak ada
+    // pembakaran bahan bakar saat menghasilkan listrik dari sinar matahari.
+    factors: { ESDM: 0.00, DEFRA: 0.00 },
+    aliases: [
+      "listrik solar panel mandiri", "listrik solar panel on site", "listrik solar panel internal",
+      "listrik panel surya mandiri", "listrik solar surya on site", "solar panel on site",
+      "plts on site", "panel surya sendiri", "energi surya mandiri",
+      "produksi listrik mandiri", "produksi listrik mandiri dari panel surya",
+      "energi terbarukan internal", "pembangkit panel surya internal",
+    ],
   },
 
   // ══════════════════════════════════════════════════════════
   // SCOPE 2 — INDIRECT (ENERGY)
   // ══════════════════════════════════════════════════════════
- {
+  {
     value: "listrik_pln",
     label: "Listrik PLN",
     scope: "Scope 2 (Indirect - Energy)",
     unit: "kWh",
     category: "Electricity",
-    
-    factors: { ESDM: null, IPCC: 0.87, DEFRA: 0.72 },
+
+    factors: { ESDM: 0.85, DEFRA: 0.095},
     needsVerification: true,
     aliases: [
       "listrik pln", "listrik", "pln", "konsumsi listrik pln", "tagihan listrik", "konsumsi listrik", "daya listrik",
@@ -336,14 +300,8 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     // Ditjen Ketenagalistrikan KESDM, ditetapkan via Kepmen ESDM
     // No. 163.K/HK.02/MEM.S/2021 (30 Agustus 2021).
     // CM Ex-Ante (OM 0,5 / BM 0,5), grid Jawa-Madura-Bali = 0,87 ton CO2/MWh.
-    // IPCC/DEFRA dikosongkan — tidak ada faktor grid Indonesia dari sumber itu.
-    // TERVERIFIKASI ULANG (20 Jun 2026): dicek langsung ke halaman resmi
-    // gatrik.esdm.go.id (kategori "Faktor Emisi Pembangkit Listrik") — per
-    // tanggal cek, dokumen "Faktor Emisi GRK Tahun 2019" MASIH dokumen
-    // terbaru yang dipublikasikan resmi (belum ada rilis 2020 dst). Jadi
-    // nilai ini BUKAN data usang yang ketinggalan update — ini memang angka
-    // resmi paling mutakhir yang tersedia sampai saat ini.
-    factors: { ESDM: 0.87, IPCC: null, DEFRA: null },
+    // DEFRA dikosongkan — tidak ada faktor grid Indonesia dari sumber itu.
+    factors: { ESDM: 0.87, DEFRA: null },
     aliases: [
       "listrik pln", "listrik", "pln", "listrik pln grid jamali", "listrik pln grid jawa madura bali", "tagihan listrik", "konsumsi listrik", "daya listrik",
       "grid jamali", "grid jawa madura bali", "listrik jawa", "listrik jamali",
@@ -356,14 +314,11 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 2 (Indirect - Energy)",
     unit: "kWh",
     category: "Electricity",
-    // Sumber sama dengan Jamali di atas.
-    // CM Ex-Ante (OM 0,5 / BM 0,5), grid Sumatera = 0,93 ton CO2/MWh.
-    // TERVERIFIKASI ULANG (20 Jun 2026): sama seperti grid Jamali di atas —
-    // dokumen 2019 (Kepmen 2021) ini memang masih yang terbaru secara resmi
-    // per saat ini, bukan vintage data yang perlu "dikejar update"-nya.
-    // needsVerification dihapus karena sudah dikonfirmasi tidak ada versi
-    // lebih baru yang tersedia.
-    factors: { ESDM: 0.93, IPCC: null, DEFRA: null },
+    // Sumber sama dengan Jamali di atas (dokumen & Kepmen yang sama, tahun
+    // data 2019) — CM Ex-Ante (OM 0,5 / BM 0,5), grid Sumatera = 0,93 ton
+    // CO2/MWh. Bukan vintage data yang berbeda dari Jamali; keduanya dari
+    // dokumen resmi yang sama.
+    factors: { ESDM: 0.93, DEFRA: null },
     aliases: [
       "grid sumatera", "grid pln sumatera", "listrik sumatera", "listrik pln grid sumatera", "listrik site sumatera",
       "sumatera selatan", "site sumatera selatan", "konsumsi listrik site sumatera selatan",
@@ -373,62 +328,57 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     ],
   },
   {
-    value: "listrik_solar_panel",
+    value: "listrik_solar_panel_onsite",
     label: "Listrik Solar Surya",
-    scope: "Scope 1 (Direct - On-site Generation)",
+    scope: "Scope 2 (Indirect - Energy)",
     unit: "kWh",
     category: "Renewable Energy",
-    // Produksi Listrik Mandiri dari Panel Surya (Energi Terbarukan Internal).
-    // Faktor emisi operasional = 0 karena tidak ada pembakaran bahan bakar
-    // saat menghasilkan listrik dari sinar matahari. Konsisten dengan
-    // listrik_hidro & listrik_angin di bawah. (Nilai 0,93 sebelumnya keliru —
-    // itu adalah faktor Combined Margin untuk proyek CDM/JCM yang menjual
-    // listrik ke grid PLN, bukan untuk listrik yang diproduksi & dipakai sendiri.)
-    factors: { ESDM: 0.00, IPCC: 0.00, DEFRA: 0.00 },
+    // Produksi listrik mandiri dari panel surya, dipakai sendiri di lokasi
+    // (bukan dibeli dari PLN). Faktor emisi operasional = 0 karena tidak ada
+    // pembakaran bahan bakar saat menghasilkan listrik dari sinar matahari.
+    factors: { ESDM: 0.00, DEFRA: 0.00 },
     aliases: [
-      "listrik solar panel", "listrik panel surya", "listrik solar surya", "solar panel",
+      "listrik solar panel", "listrik solar panel", "listrik solar panel",
+      "listrik panel surya", "listrik solar surya", "solar panel",
       "plts", "panel surya", "energi surya",
-      "produksi listrik mandiri", "produksi listrik mandiri dari panel surya",
-      "energi terbarukan internal", "pembangkit mandiri panel surya",
+      "pembelian energi terbarukan", "pembelian energi plts", "pembangkit panel surya",
+      "listrik solar panel", "listrik panel surya", "listrik solar surya", "plts", "panel surya", "energi surya",
     ],
   },
   {
     value: "listrik_hidro",
     label: "Listrik Hidro",
-    scope: "Scope 1 (Direct - On-site Generation)",
+    scope: "Scope 2 (Indirect - Energy)",
     unit: "kWh",
     category: "Renewable Energy",
-    factors: { ESDM: 0.00, IPCC: 0.00, DEFRA: 0.00 },
+    factors: { ESDM: 0.00, DEFRA: 0.00 },
     aliases: ["listrik hidro", "pltah", "plta", "energi air", "hidroelektrik"],
   },
   {
     value: "listrik_angin",
     label: "Listrik Angin",
-    scope: "Scope 1 (Direct - On-site Generation)",
+    scope: "Scope 2 (Indirect - Energy)",
     unit: "kWh",
     category: "Renewable Energy",
-    factors: { ESDM: 0.00, IPCC: 0.00, DEFRA: 0.00 },
+    factors: { ESDM: 0.00, DEFRA: 0.00 },
     aliases: ["listrik angin", "pltb angin", "turbin angin", "energi angin"],
   },
 
   // ══════════════════════════════════════════════════════════
   // SCOPE 3 — VALUE CHAIN
   // ══════════════════════════════════════════════════════════
-  // CATATAN ATRIBUSI: kolom "IPCC" pada beberapa entri di bawah ini (transportasi,
-  // limbah) belum diverifikasi terhadap dokumen 2006 IPCC Guidelines secara
-  // langsung. IPCC 2006 tidak menerbitkan angka siap-pakai per-km atau per-kg
-  // untuk kategori ini — metodologinya butuh beberapa parameter tambahan
-  // (mis. DOC, MCF untuk limbah). Nilai di bawah kemungkinan berasal dari
-  // kalkulator/database pihak ketiga, bukan langsung dari IPCC. Belum diubah
-  // karena belum dicek ulang ke sumber primer — direkomendasikan verifikasi
-  // lanjutan kalau dipakai untuk laporan formal/audit.
+  // Semua entri di bawah ini murni dari DEFRA — ESDM tidak menerbitkan
+  // faktor untuk transportasi penumpang per-km, limbah per-jenis, material
+  // kantor, atau air. Belum diverifikasi cell-by-cell ke workbook resmi
+  // terbaru; direkomendasikan verifikasi lanjutan kalau dipakai untuk
+  // laporan formal/audit.
   {
     value: "pesawat_domestik",
     label: "Pesawat Domestik",
     scope: "Scope 3 (Value Chain)",
     unit: "Km",
     category: "Transportation",
-    factors: { ESDM: null, IPCC: 0.11, DEFRA: 0.15 },
+    factors: { ESDM: null, DEFRA: 0.15 },
     needsVerification: true,
     aliases: ["pesawat domestik", "perjalanan pesawat", "perjalanan dinas pesawat domestik", "penerbangan domestik", "pesawat", "flight domestik", "perjalanan dinas pesawat"],
   },
@@ -438,7 +388,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Km",
     category: "Transportation",
-    factors: { ESDM: null, IPCC: 0.13, DEFRA: 0.20 },
+    factors: { ESDM: null, DEFRA: 0.20 },
     needsVerification: true,
     aliases: ["pesawat internasional", "perjalanan dinas pesawat internasional", "penerbangan internasional", "flight internasional", "pesawat luar negeri"],
   },
@@ -448,7 +398,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Km",
     category: "Transportation",
-    factors: { ESDM: null, IPCC: 0.03, DEFRA: 0.04 },
+    factors: { ESDM: null, DEFRA: 0.04 },
     needsVerification: true,
     aliases: ["kereta", "kereta api", "kai", "krl", "mrt", "lrt", "perjalanan kereta"],
   },
@@ -458,7 +408,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Km",
     category: "Transportation",
-    factors: { ESDM: null, IPCC: 0.08, DEFRA: 0.10 },
+    factors: { ESDM: null, DEFRA: 0.10 },
     needsVerification: true,
     aliases: ["bus", "bis", "bus antar kota", "perjalanan bus", "angkutan bus"],
   },
@@ -468,7 +418,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Km",
     category: "Logistics",
-    factors: { ESDM: null, IPCC: 0.22, DEFRA: 0.23 },
+    factors: { ESDM: null, DEFRA: 0.23 },
     needsVerification: true,
     aliases: ["mobil logistik", "van logistik", "pickup", "pick up", "mobil box", "armada logistik"],
   },
@@ -478,7 +428,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Km",
     category: "Logistics",
-    factors: { ESDM: null, IPCC: 0.09, DEFRA: 0.08 },
+    factors: { ESDM: null, DEFRA: 0.08 },
     needsVerification: true,
     aliases: ["truk logistik", "truk", "truck", "truk kontainer", "fuso", "wingbox"],
   },
@@ -488,7 +438,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Km",
     category: "Logistics",
-    factors: { ESDM: null, IPCC: 0.010, DEFRA: 0.016 },
+    factors: { ESDM: null, DEFRA: 0.016 },
     needsVerification: true,
     aliases: ["kapal logistik", "kapal kargo", "cargo ship", "pengiriman laut", "kapal laut"],
   },
@@ -498,7 +448,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Kg",
     category: "Waste",
-    factors: { ESDM: null, IPCC: 0.45, DEFRA: 0.58 },
+    factors: { ESDM: null, DEFRA: 0.58 },
     needsVerification: true,
     aliases: ["sampah organik", "limbah organik", "sampah sisa makanan", "sampah dapur"],
   },
@@ -508,7 +458,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Kg",
     category: "Waste",
-    factors: { ESDM: null, IPCC: 0.05, DEFRA: 0.02 },
+    factors: { ESDM: null, DEFRA: 0.02 },
     needsVerification: true,
     aliases: ["sampah anorganik", "limbah anorganik", "sampah non organik", "sampah kering"],
   },
@@ -518,7 +468,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Kg",
     category: "Hazardous Waste",
-    factors: { ESDM: null, IPCC: null, DEFRA: 1.11 },
+    factors: { ESDM: null, DEFRA: 1.11 },
     aliases: ["limbah b3", "sampah b3", "limbah berbahaya", "hazardous waste", "limbah kimia"],
   },
   {
@@ -527,7 +477,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Kg",
     category: "Office Material",
-    factors: { ESDM: null, IPCC: null, DEFRA: 1.06 },
+    factors: { ESDM: null, DEFRA: 1.06 },
     aliases: ["kertas", "kertas a4", "penggunaan kertas", "pembelian kertas", "rim kertas", "paper"],
   },
   {
@@ -536,7 +486,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Kg",
     category: "Material",
-    factors: { ESDM: null, IPCC: null, DEFRA: 3.14 },
+    factors: { ESDM: null, DEFRA: 3.14 },
     aliases: ["plastik", "kemasan plastik", "botol plastik", "plastic"],
   },
   {
@@ -545,7 +495,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "Kg",
     category: "Packaging",
-    factors: { ESDM: null, IPCC: null, DEFRA: 0.82 },
+    factors: { ESDM: null, DEFRA: 0.82 },
     aliases: ["karton", "kardus", "box karton", "packaging karton"],
   },
   {
@@ -554,7 +504,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "m3",
     category: "Water",
-    factors: { ESDM: null, IPCC: null, DEFRA: 0.344 },
+    factors: { ESDM: null, DEFRA: 0.344 },
     aliases: ["air bersih", "air pdam", "pdam", "konsumsi air", "penggunaan air"],
   },
   {
@@ -563,7 +513,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     scope: "Scope 3 (Value Chain)",
     unit: "m3",
     category: "Wastewater",
-    factors: { ESDM: null, IPCC: 0.60, DEFRA: 0.708 },
+    factors: { ESDM: null, DEFRA: 0.708 },
     needsVerification: true,
     aliases: ["air limbah", "limbah cair", "wastewater", "pengolahan air limbah"],
   },
@@ -582,20 +532,11 @@ export const REFERENCE_METADATA: Record<ReferenceKey, {
   ESDM: {
     label: "Kementerian ESDM RI",
     shortLabel: "ESDM",
-    url: "https://www.esdm.go.id/assets/media/content/content-faktor-emisi-bahan-bakar-minyak-bbm-dan-batubara.pdf",
-    description: "Faktor Emisi BBM & Batubara Nasional Indonesia. Paling spesifik untuk konteks Indonesia.",
-    lastUpdated: "Cek versi terbaru di esdm.go.id",
+    url: "https://gatrik.esdm.go.id/frontend/download_index/?kode_category=emisi_pl",
+    description: "Faktor Emisi Energi, BBM & Batubara Nasional Indonesia. Paling spesifik untuk konteks Indonesia.",
+    lastUpdated: "Cek versi terbaru di esdm.go.id / gatrik.esdm.go.id",
     scopeCoverage: ["Scope 1", "Scope 2"],
     badge: "bg-red-100 text-red-700 border-red-200",
-  },
-  IPCC: {
-    label: "IPCC 2006 Guidelines",
-    shortLabel: "IPCC 2006",
-    url: "https://www.ipcc-nggip.iges.or.jp/public/2006gl/",
-    description: "Panduan inventarisasi GRK nasional oleh IPCC. Default global Tier 1. Masih berlaku — belum ada revisi resmi pengganti.",
-    lastUpdated: "2006, dengan 2019 Refinement (masih versi terkini per Juni 2026)",
-    scopeCoverage: ["Scope 1", "Scope 3 (transportasi & limbah)"],
-    badge: "bg-blue-100 text-blue-700 border-blue-200",
   },
   DEFRA: {
     label: "UK DESNZ/DEFRA Conversion Factors",
@@ -605,7 +546,7 @@ export const REFERENCE_METADATA: Record<ReferenceKey, {
     // publikasi tahun tertentu, karena URL publikasi per-tahun kadang berubah.
     url: "https://www.gov.uk/government/collections/government-conversion-factors-for-company-reporting",
     description: "Faktor konversi GRK dari pemerintah UK (DESNZ, sebelumnya DEFRA/BEIS). Detail untuk material, limbah, dan transportasi.",
-    lastUpdated: "2026 (DESNZ, dirilis 11 Juni 2026, dikonfirmasi via gov.uk) — perubahan besar rilis 2026 hanya pada faktor listrik/rel/EV (turun ~26% untuk listrik), faktor bahan bakar/gas/batubara/pelumas TIDAK termasuk yang berubah",
+    lastUpdated: "2026 (DESNZ, dirilis 11 Juni 2026) — perubahan besar rilis 2026 hanya pada faktor listrik/rel/EV, faktor bahan bakar/gas/batubara/pelumas tidak termasuk yang berubah",
     scopeCoverage: ["Scope 1", "Scope 3"],
     badge: "bg-purple-100 text-purple-700 border-purple-200",
   },

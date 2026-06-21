@@ -69,7 +69,7 @@ interface Props {
   onReferenceChange: (ref: ReferenceKey) => void;
 }
 
-const REFERENCE_ORDER: ReferenceKey[] = ["ESDM", "IPCC", "DEFRA"];
+const REFERENCE_ORDER: ReferenceKey[] = ["ESDM", "DEFRA"];
 
 // ── Validasi Input Manual ─────────────────────────────────────────────────
 // Field wajib: Tahun (periode), Detail Aktivitas, dan Jumlah (> 0).
