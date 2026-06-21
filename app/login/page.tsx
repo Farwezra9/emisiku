@@ -49,7 +49,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-6 bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-emerald-800">Selamat Datang</h2>
-          <p className="text-gray-500 mt-1">Masuk ke Carbon Intelligence System</p>
+          <p className="text-gray-500 mt-1">Login ke Carbon Calculation System</p>
         </div>
 
         {error && (

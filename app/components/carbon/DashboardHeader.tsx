@@ -119,7 +119,7 @@ export default function DashboardHeader({
                 className="w-full flex items-center gap-2 px-3.5 py-2 text-[13px] text-red-600 hover:bg-red-50 font-medium transition text-left"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                Keluar Aplikasi
+                LogOut
               </button>
             </div>
           )}
