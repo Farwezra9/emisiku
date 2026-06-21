@@ -63,7 +63,7 @@ function dapatkanAngkaScope(teksInput: string): number | null {
 }
 
 // Validasi nilai reference yang dikirim dari frontend
-const VALID_REFERENCES: ReferenceKey[] = ["ESDM", "IPCC", "DEFRA"];
+const VALID_REFERENCES: ReferenceKey[] = ["ESDM", "DEFRA"];
 
 function parseReference(value: FormDataEntryValue | null): ReferenceKey {
   if (typeof value === "string" && VALID_REFERENCES.includes(value as ReferenceKey)) {
