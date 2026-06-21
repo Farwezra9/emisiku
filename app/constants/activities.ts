@@ -266,7 +266,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     factors: { ESDM: 0.00, DEFRA: 0.00 },
     aliases: [
       "listrik solar panel mandiri", "listrik solar panel on site", "listrik solar panel internal",
-      "listrik panel surya mandiri", "listrik solar surya on site", "solar panel on site",
+      "listrik panel surya mandiri", "listrik solar surya onsite","listrik solar surya on site", "solar panel on site",
       "plts on site", "panel surya sendiri", "energi surya mandiri",
       "produksi listrik mandiri", "produksi listrik mandiri dari panel surya",
       "energi terbarukan internal", "pembangkit panel surya internal",
@@ -328,7 +328,7 @@ export const ACTIVITY_OPTIONS: ActivityOption[] = [
     ],
   },
   {
-    value: "listrik_solar_panel_onsite",
+    value: "listrik_solar_panel",
     label: "Listrik Solar Surya",
     scope: "Scope 2 (Indirect - Energy)",
     unit: "kWh",
