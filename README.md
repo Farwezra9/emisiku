@@ -142,8 +142,8 @@ emisiku/
 ├── app/                # Halaman & API routes (Next.js)
 ├── components/         # Komponen UI (InputForm, EmissionTable, dll.)
 ├── hooks/              # Custom hooks
-├── lib/                # Service layer, util (excelUtils, kalkulasi)
-├── supabase/           # Skema & seed faktor emisi
+├── lib/                # Supabase service
+├── utils               # Service layer, util (excelUtils, kalkulasi)
 └── public/
 ```
 
