@@ -1,8 +1,11 @@
+// Simpan sebagai: app/components/carbon/DashboardHeader.tsx
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Leaf, User, LogOut, ChevronDown, BarChart2, Home } from "lucide-react";
+import { User, LogOut, ChevronDown, BarChart2, Home } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
+
+const display = "font-[family-name:var(--font-display)]";
 
 interface DashboardHeaderProps {
   userEmail: string | null;
@@ -38,58 +41,49 @@ export default function DashboardHeader({
 
   const isAnalysisPage = pathname?.includes("/analysis");
 
+  const tabClass = (active: boolean) =>
+    `flex items-center gap-1.5 border-b-2 px-3 text-[13px] font-medium transition-colors ${
+      active
+        ? "border-emerald-300 text-white"
+        : "border-transparent text-emerald-100/70 hover:text-white"
+    }`;
+
   return (
     <header
-      className={`
-        sticky top-0 z-50 w-full
-        transition-all duration-200
-        ${scrolled
-          ? "bg-white/80 backdrop-blur-xl shadow-sm border-b border-gray-200/60"
-          : "bg-white/60 backdrop-blur-md border-b border-transparent"
-        }
-      `}
+      className={`sticky top-0 z-50 w-full border-b border-emerald-950 bg-[#0f2f23] transition-shadow duration-200 ${
+        scrolled ? "shadow-md" : ""
+      }`}
     >
-      <div className="flex items-center justify-between h-14 px-6">
-
+      <div className="flex h-14 items-center justify-between px-4 sm:px-6">
         {/* ── Logo ── */}
         <button
           onClick={() => router.push("/dashboard")}
-          className="flex items-center gap-2 shrink-0 group"
+          className="flex shrink-0 items-center gap-2.5"
         >
-          <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center group-hover:bg-emerald-600 transition-colors">
-           <img src="/emisiku.svg" alt="Logo Emisiku" className="w-4 h-4" />
-          </div>
-          <span className="font-bold text-[15px] text-emerald-800 tracking-tight">
+          <span className="flex h-8 w-8 items-center justify-center rounded bg-stone-100">
+            <img src="/emisiku.svg" alt="Logo Emisiku" className="h-5 w-5" />
+          </span>
+          <span className={`${display} text-lg font-semibold tracking-tight text-stone-50`}>
             Emisiku
           </span>
         </button>
 
         {/* ── Nav (tengah) ── */}
-        <nav className="flex items-center gap-0.5 absolute left-1/2 -translate-x-1/2">
+        <nav className="absolute left-1/2 top-0 flex h-14 -translate-x-1/2 items-stretch gap-1">
           <button
             onClick={() => router.push("/dashboard")}
-            className={`
-              flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-semibold transition-all
-              ${!isAnalysisPage
-                ? "bg-emerald-600 text-white"
-                : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"}
-            `}
+            className={tabClass(!isAnalysisPage)}
           >
-            <Home size={13} />
-            Dashboard
+            <Home size={14} />
+            <span>Dashboard</span>
           </button>
 
           <button
             onClick={onNavigateAnalysis ?? (() => router.push("/dashboard/analysis"))}
-            className={`
-              flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-semibold transition-all
-              ${isAnalysisPage
-                ? "bg-emerald-600 text-white"
-                : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"}
-            `}
+            className={tabClass(!!isAnalysisPage)}
           >
-            <BarChart2 size={13} />
-            Analisis & Chart
+            <BarChart2 size={14} />
+            <span>Analisis & Chart</span>
           </button>
         </nav>
 
@@ -97,29 +91,40 @@ export default function DashboardHeader({
         <div className="relative shrink-0" ref={dropdownRef}>
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors outline-none"
+            className="flex items-center gap-2 rounded px-2 py-1.5 outline-none transition-colors hover:bg-white/10"
           >
-            <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center">
-              <User className="w-3 h-3 text-emerald-700" />
-            </div>
-            <span className="text-[13px] font-medium text-gray-700 max-w-[130px] truncate hidden sm:block">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-800">
+              <User className="h-3 w-3 text-emerald-100" />
+            </span>
+            <span className="hidden max-w-[130px] truncate text-[13px] font-medium text-stone-100 sm:block">
               {userEmail?.split("@")[0] || "User"}
             </span>
-            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} />
+            <ChevronDown
+              className={`h-3.5 w-3.5 text-emerald-100/70 transition-transform duration-150 ${
+                isOpen ? "rotate-180" : ""
+              }`}
+            />
           </button>
 
           {isOpen && (
-            <div className="absolute right-0 mt-1.5 w-52 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50">
-              <div className="px-3.5 py-2.5 border-b border-gray-100">
-                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Masuk sebagai</p>
-                <p className="text-[13px] text-gray-800 font-semibold truncate mt-0.5">{userEmail}</p>
+            <div className="absolute right-0 z-50 mt-1.5 w-56 rounded-md border border-stone-300 bg-[#fbfaf6] py-1 shadow-lg">
+              <div className="border-b border-stone-200 px-3.5 py-2.5">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-stone-500">
+                  Masuk sebagai
+                </p>
+                <p className="mt-0.5 truncate text-[13px] font-semibold text-stone-900">
+                  {userEmail}
+                </p>
               </div>
               <button
-                onClick={() => { setIsOpen(false); onLogout(); }}
-                className="w-full flex items-center gap-2 px-3.5 py-2 text-[13px] text-red-600 hover:bg-red-50 font-medium transition text-left"
+                onClick={() => {
+                  setIsOpen(false);
+                  onLogout();
+                }}
+                className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13px] font-medium text-red-700 transition hover:bg-red-50"
               >
-                <LogOut className="w-3.5 h-3.5" />
-                LogOut
+                <LogOut className="h-3.5 w-3.5" />
+                Keluar
               </button>
             </div>
           )}

@@ -5,11 +5,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { saveAs } from "file-saver";
-import { CheckCircle, XCircle, AlertTriangle, X, BarChart2, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import DashboardHeader from "@/app/components/carbon/DashboardHeader";
 import InputForm       from "@/app/components/carbon/InputForm";
 import EmissionTable   from "@/app/components/carbon/EmissionTable";
+import { NatureBackdrop } from "@/app/components/nature-backdrop";
+import AlertModal from "@/app/components/ui/alert-modal";
 
 import { InputRow, ResultData } from "@/app/types/carbon";
 import { useCarbonCalculation } from "@/app/hooks/useCarbonCalculation";
@@ -26,6 +28,47 @@ const initialResult: ResultData = {
   ],
   detail: [],
 };
+
+/* Latar tipis bertema alam untuk area kerja: garis kontur dan bukit samar */
+function DashboardBackdrop() {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 1440 900"
+      preserveAspectRatio="xMidYMid slice"
+      className="pointer-events-none fixed inset-0 z-0 h-full w-full"
+    >
+      <defs>
+        <path
+          id="db-contour"
+          d="M-60 120 C 160 50, 360 190, 600 110 S 1000 30, 1260 120 S 1460 90, 1520 130"
+          fill="none"
+        />
+      </defs>
+      <g stroke="#2d6a4f" strokeWidth="1" opacity="0.09">
+        {Array.from({ length: 16 }).map((_, i) => (
+          <use
+            key={i}
+            href="#db-contour"
+            y={i * 30}
+            transform={`translate(${i % 2 === 0 ? 0 : -50} 0)`}
+          />
+        ))}
+      </g>
+      <path
+        d="M0 790 C 260 740 480 785 720 752 S 1160 712 1440 765 V900 H0 Z"
+        fill="#1b4332"
+        opacity="0.06"
+      />
+      <path
+        d="M0 850 C 300 815 560 845 820 825 S 1250 800 1440 830 V900 H0 Z"
+        fill="#1b4332"
+        opacity="0.07"
+      />
+    </svg>
+  );
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -49,13 +92,6 @@ export default function DashboardPage() {
     message: string;
     onConfirm?: () => void;
   }>({ isOpen: false, type: "success", title: "", message: "" });
-
-  useEffect(() => {
-    if (modal.isOpen && modal.type === "success") {
-      const t = setTimeout(() => setModal((p) => ({ ...p, isOpen: false })), 3500);
-      return () => clearTimeout(t);
-    }
-  }, [modal.isOpen, modal.type]);
 
   // ── Fetch helpers ─────────────────────────────────────────────────────────
   const fetchImportedFiles = useCallback(async (uid: string) => {
@@ -128,15 +164,20 @@ export default function DashboardPage() {
   // ── Auth check ────────────────────────────────────────────────────────────
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push("/login");
-      } else {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          router.push("/login");
+          return;
+        }
         setIsAuthorized(true);
         setUserEmail(session.user.email ?? "");
         setUserId(session.user.id);
         fetchImportedFiles(session.user.id);
         fetchEmissionRecords(session.user.id);
+      } catch {
+        // Server autentikasi tidak terjangkau: kembalikan ke halaman login
+        router.push("/login");
       }
     };
     checkUser();
@@ -188,32 +229,29 @@ export default function DashboardPage() {
   // ── Import file ───────────────────────────────────────────────────────────
   const handleImportSuccess = async (result: any, rawExtractedRows: any[], fileName: string, filePath: string, fileSize: number) => {
     if (!userId) return;
-    try {
-      const { data: fileRecord, error: fileDbError } = await supabase
-        .from("imported_files")
-        .insert({ user_id: userId, file_name: fileName, file_path: filePath, file_size: fileSize, total_records_extracted: rawExtractedRows?.length ?? 0 })
-        .select("id").single();
-      if (fileDbError) throw new Error(`imported_files: ${fileDbError.message}`);
-      if (!fileRecord) throw new Error("Gagal memperoleh ID Berkas.");
+    // Error sengaja tidak ditangkap di sini: InputForm yang menampilkan satu alert
+    // hasil impor (berhasil atau gagal), sehingga tidak muncul dua alert sekaligus.
+    const { data: fileRecord, error: fileDbError } = await supabase
+      .from("imported_files")
+      .insert({ user_id: userId, file_name: fileName, file_path: filePath, file_size: fileSize, total_records_extracted: rawExtractedRows?.length ?? 0 })
+      .select("id").single();
+    if (fileDbError) throw new Error(`imported_files: ${fileDbError.message}`);
+    if (!fileRecord) throw new Error("Gagal memperoleh ID Berkas.");
 
-      if (rawExtractedRows?.length > 0) {
-        const recordsToInsert = rawExtractedRows.map((item: any) => ({
-          user_id: userId, file_id: fileRecord.id,
-          periode: item.periode, aktivitas: item.aktivitas, detail_aktivitas: item.detail_aktivitas,
-          jumlah: Number(item.jumlah) || 0, satuan: item.satuan || item.Satuan,
-          scope: item.scope, kategori: item.kategori,
-          emisi_kgco2e: item.emisi_kgCO2e || 0, emisi_tco2e: item.emisi_tCO2e || 0,
-        }));
-        const { error: recordsDbError } = await supabase.from("emisi_records").insert(recordsToInsert);
-        if (recordsDbError) throw new Error(`emisi_records: ${recordsDbError.message}`);
-      }
-
-      setModal({ isOpen: true, type: "success", title: "Impor Sukses", message: `Berkas "${fileName}" berhasil diekstraksi (Referensi: ${selectedReference}) dan disimpan.` });
-      fetchImportedFiles(userId);
-      fetchEmissionRecords(userId);
-    } catch (err: any) {
-      setModal({ isOpen: true, type: "error", title: "Gagal Memproses File", message: err.message || "Terjadi kendala saat membaca dokumen." });
+    if (rawExtractedRows?.length > 0) {
+      const recordsToInsert = rawExtractedRows.map((item: any) => ({
+        user_id: userId, file_id: fileRecord.id,
+        periode: item.periode, aktivitas: item.aktivitas, detail_aktivitas: item.detail_aktivitas,
+        jumlah: Number(item.jumlah) || 0, satuan: item.satuan || item.Satuan,
+        scope: item.scope, kategori: item.kategori,
+        emisi_kgco2e: item.emisi_kgCO2e || 0, emisi_tco2e: item.emisi_tCO2e || 0,
+      }));
+      const { error: recordsDbError } = await supabase.from("emisi_records").insert(recordsToInsert);
+      if (recordsDbError) throw new Error(`emisi_records: ${recordsDbError.message}`);
     }
+
+    fetchImportedFiles(userId);
+    fetchEmissionRecords(userId);
   };
 
   // ── Download file ─────────────────────────────────────────────────────────
@@ -280,9 +318,10 @@ export default function DashboardPage() {
   // ── Loading ───────────────────────────────────────────────────────────────
   if (!isAuthorized) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center gap-2 text-gray-500 text-sm font-medium">
-          <Loader2 className="animate-spin w-4 h-4" />
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#081c15]">
+        <NatureBackdrop />
+        <div className="relative z-10 flex items-center gap-3 rounded-md bg-[#f6f4ee] px-5 py-3 text-sm font-medium text-emerald-950 shadow-xl">
+          <Loader2 className="h-4 w-4 animate-spin text-emerald-800" />
           Memeriksa autentikasi...
         </div>
       </div>
@@ -292,21 +331,49 @@ export default function DashboardPage() {
   const hasData = resultData.detail.length > 0;
 
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-800">
+    <main className="relative min-h-screen bg-[#f6f4ee] text-stone-800">
+      <DashboardBackdrop />
 
-      <DashboardHeader
-        userEmail={userEmail}
-        onLogout={handleLogout}
-        onNavigateAnalysis={hasData ? handleNavigateAnalysis : undefined}
-      />
+      <div className="relative z-10">
+        <DashboardHeader
+          userEmail={userEmail}
+          onLogout={handleLogout}
+          onNavigateAnalysis={hasData ? handleNavigateAnalysis : undefined}
+        />
 
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="mx-auto max-w-screen-2xl px-4 py-4 sm:px-6 lg:px-8">
+          {hasData ? (
+            <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[380px_1fr]">
+              {/* Form: menempel saat scroll */}
+              <div className="xl:sticky xl:top-[72px]">
+                <InputForm
+                  inputs={inputs}
+                  loading={loading}
+                  onChange={handleChange}
+                  onAdd={handleAdd}
+                  onRemove={handleRemove}
+                  onSubmit={handleSubmit}
+                  onImportSuccess={handleImportSuccess}
+                  importedFiles={importedFiles}
+                  onDownloadFile={handleDownloadFile}
+                  onDeleteFile={handleDeleteFile}
+                  selectedReference={selectedReference}
+                  onReferenceChange={setSelectedReference}
+                />
+              </div>
 
-        {hasData ? (
-          <div className="grid grid-cols-1 xl:grid-cols-[400px_1fr] gap-6 items-start">
-
-            {/* Form — sticky */}
-            <div className="xl:sticky xl:top-[62px]">
+              {/* Tabel */}
+              <div className="min-w-0 space-y-4">
+                <EmissionTable
+                  detail={resultData.detail}
+                  onDeleteAllRecords={handleDeleteAllRecords}
+                  selectedReference={selectedReference}
+                />
+              </div>
+            </div>
+          ) : (
+            /* Form full lebar saat kosong */
+            <div className="max-w-full">
               <InputForm
                 inputs={inputs}
                 loading={loading}
@@ -322,78 +389,19 @@ export default function DashboardPage() {
                 onReferenceChange={setSelectedReference}
               />
             </div>
-
-            {/* Tabel */}
-            <div className="min-w-0 space-y-4">
-              <EmissionTable
-                detail={resultData.detail}
-                onDeleteAllRecords={handleDeleteAllRecords}
-                selectedReference={selectedReference}
-              />
-            </div>
-          </div>
-
-        ) : (
-          /* Form full lebar saat kosong */
-          <div className="max-w-full">
-            <InputForm
-              inputs={inputs}
-              loading={loading}
-              onChange={handleChange}
-              onAdd={handleAdd}
-              onRemove={handleRemove}
-              onSubmit={handleSubmit}
-              onImportSuccess={handleImportSuccess}
-              importedFiles={importedFiles}
-              onDownloadFile={handleDownloadFile}
-              onDeleteFile={handleDeleteFile}
-              selectedReference={selectedReference}
-              onReferenceChange={setSelectedReference}
-            />
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* ── GLOBAL MODAL ─────────────────────────────────────────────────── */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/40 backdrop-blur-[2px]">
-          <div className="bg-white rounded-3xl p-8 shadow-2xl max-w-lg w-full text-center space-y-5 border border-gray-100 relative animate-in fade-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setModal((p) => ({ ...p, isOpen: false }))}
-              className="absolute right-5 top-5 text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition"
-            >
-              <X size={20} />
-            </button>
-            <div className="flex justify-center pt-2">
-              <div className={`p-4 rounded-full ${modal.type === "success" ? "bg-emerald-50" : modal.type === "error" ? "bg-red-50" : "bg-amber-50"}`}>
-                {modal.type === "success" && <CheckCircle   className="text-emerald-500" size={64} />}
-                {modal.type === "error"   && <XCircle       className="text-red-500"     size={64} />}
-                {modal.type === "confirm" && <AlertTriangle className="text-amber-500"   size={64} />}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-gray-900">{modal.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed px-4">{modal.message}</p>
-            </div>
-            {modal.type === "confirm" ? (
-              <div className="flex gap-3 pt-3">
-                <button onClick={() => setModal((p) => ({ ...p, isOpen: false }))}
-                  className="flex-1 py-3 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
-                  Batal
-                </button>
-                <button onClick={() => { modal.onConfirm?.(); setModal((p) => ({ ...p, isOpen: false })); }}
-                  className="flex-1 py-3 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 transition shadow-sm">
-                  Ya, Hapus
-                </button>
-              </div>
-            ) : (
-              <div className="text-xs text-gray-400 pt-2">
-                {modal.type === "success" ? "Jendela ini akan tertutup otomatis..." : "Klik ikon silang di atas untuk menutup"}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* ── ALERT (komponen yang sama dipakai di seluruh aplikasi) ─────────── */}
+      <AlertModal
+        isOpen={modal.isOpen}
+        type={modal.type}
+        title={modal.title}
+        message={modal.message}
+        onClose={() => setModal((p) => ({ ...p, isOpen: false }))}
+        onConfirm={modal.onConfirm}
+      />
     </main>
   );
 }

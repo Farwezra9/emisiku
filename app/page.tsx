@@ -1,60 +1,99 @@
-import Link from 'next/link';
+// Simpan sebagai: app/page.tsx
+import Link from "next/link";
+import { NatureBackdrop } from "@/app/components/nature-backdrop";
+
+const display = "font-[family-name:var(--font-display)]";
+
+const scopes = [
+  {
+    label: "Scope 1",
+    text: "Emisi langsung dari sumber milik sendiri, seperti kendaraan operasional dan genset.",
+  },
+  {
+    label: "Scope 2",
+    text: "Emisi tidak langsung dari energi yang dibeli, terutama listrik.",
+  },
+  {
+    label: "Scope 3",
+    text: "Emisi dari rantai nilai: perjalanan dinas, pengadaan, dan limbah.",
+  },
+];
 
 export default function Home() {
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-emerald-50/30 text-gray-800 overflow-hidden px-4 sm:px-6">
-      
-      {/* Efek Dekorasi Latar Belakang (Blob Minimalis) */}
-      <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] rounded-full bg-emerald-200/20 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] rounded-full bg-blue-200/20 blur-3xl pointer-events-none" />
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#081c15] text-stone-100">
+      <NatureBackdrop />
 
-      {/* Konten Utama */}
-      <div className="relative z-10 text-center max-w-2xl mx-auto flex flex-col items-center">
-        
-        {/* Badge Info Kecil */}
-        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 mb-6 text-xs font-medium text-emerald-800 bg-emerald-100/80 backdrop-blur-sm rounded-full border border-emerald-200/50 shadow-sm animate-fade-in">
-          🌱 Carbon Calculation System
-        </span>
-
-        {/* Judul Utama yang Responsif */}
-        <h1 className="flex items-center gap-2 sm:gap-3 text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-slate-900 mb-4 leading-tight sm:leading-none">
-          <img
-            src="/emisiku.svg"
-            alt="Logo Emisiku"
-            className="w-9 h-9 sm:w-12 sm:h-12 md:w-14 md:h-14"
-          />
-          <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+      <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 sm:px-8">
+        <Link href="/" className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-stone-100">
+            <img src="/emisiku.svg" alt="" className="h-6 w-6" />
+          </span>
+          <span className={`${display} text-xl font-semibold tracking-tight`}>
             Emisiku
           </span>
-        </h1>
-        
-        {/* Deskripsi */}
-        <p className="text-base sm:text-lg md:text-xl text-gray-500 max-w-xl mb-8 leading-relaxed px-2">
-          Hitung, lacak, dan kategorisasi emisi GRK (Scope 1, 2, & 3) Anda secara otomatis dalam satu platform.
+        </Link>
+        <Link
+          href="/login"
+          className="text-sm font-medium text-stone-200 underline-offset-4 hover:text-white hover:underline"
+        >
+          Masuk
+        </Link>
+      </header>
+
+      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-6 pb-16 pt-8 sm:px-8">
+        <p className="mb-6 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.2em] text-emerald-200/80">
+          <span className="h-px w-10 bg-emerald-200/60" />
+          Perhitungan emisi gas rumah kaca
         </p>
-        
-        {/* Tombol Aksi yang Responsif (Menumpuk di HP, Berjejer di Desktop) */}
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto px-4 sm:px-0">
-          <Link 
-            href="/login" 
-            className="w-full sm:w-auto text-center px-8 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 shadow-lg shadow-emerald-600/20 hover:shadow-emerald-600/30 transform hover:-translate-y-0.5 active:translate-y-0"
+
+        <h1
+          className={`${display} max-w-3xl text-4xl font-medium leading-[1.1] tracking-tight text-stone-50 sm:text-5xl lg:text-6xl`}
+        >
+          Catat aktivitas, hitung emisi, dan pahami jejak karbon Anda.
+        </h1>
+
+        <p className="mt-6 max-w-xl text-base leading-relaxed text-stone-300 sm:text-lg">
+          Emisiku menghitung dan mengelompokkan emisi Scope 1, 2, dan 3 secara
+          otomatis, lengkap dengan laporan yang bisa langsung ditindaklanjuti.
+        </p>
+
+        <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/login"
+            className="rounded-md bg-stone-100 px-7 py-3 text-center text-sm font-semibold text-emerald-950 transition-colors hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#081c15]"
           >
-            Masuk ke Dashboard
+            Masuk ke dashboard
           </Link>
-          <Link 
-            href="/register" 
-            className="w-full sm:w-auto text-center px-8 py-3.5 bg-white text-slate-700 border border-slate-200 font-semibold rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm transform hover:-translate-y-0.5 active:translate-y-0"
+          <Link
+            href="/register"
+            className="rounded-md border border-stone-400/50 px-7 py-3 text-center text-sm font-semibold text-stone-100 transition-colors hover:border-stone-200 hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#081c15]"
           >
-            Daftar Akun Baru
+            Buat akun
           </Link>
         </div>
 
-      </div>
+        <dl className="mt-16 grid gap-8 border-t border-white/15 pt-6 sm:grid-cols-3 sm:gap-10">
+          {scopes.map((s) => (
+            <div key={s.label}>
+              <dt
+                className={`${display} text-lg font-medium text-emerald-100`}
+              >
+                {s.label}
+              </dt>
+              <dd className="mt-2 text-sm leading-relaxed text-stone-300">
+                {s.text}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </main>
 
-      {/* Footer / Copyright teks tipis di bawah */}
-      <div className="absolute bottom-6 text-xs text-gray-400">
-        &copy; {new Date().getFullYear()} AKUUUUUUUUUUUUUUUUUU
-      </div>
+      <footer className="relative z-10 px-6 pb-6 text-xs text-stone-400 sm:px-8">
+        <div className="mx-auto max-w-6xl">
+          &copy; {new Date().getFullYear()} Emisiku
+        </div>
+      </footer>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-// components/carbon/EmissionTable.tsx
+// Simpan sebagai: app/components/carbon/EmissionTable.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -16,14 +16,29 @@ import {
 } from "@/app/constants/activities";
 import { DetailOutput } from "@/app/types/carbon";
 import { downloadLaporanExcel } from "@/app/utils/excelUtils";
+import AlertModal from "@/app/components/ui/alert-modal";
+
+const display = "font-[family-name:var(--font-display)]";
+
+// ── Token gaya ───────────────────────────────────────────────────────────────
+const btnOutline =
+  "inline-flex items-center gap-1.5 rounded border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-stone-800 transition hover:bg-stone-50";
+const btnSolid =
+  "inline-flex items-center gap-1.5 rounded bg-emerald-900 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-800";
+const btnDanger =
+  "inline-flex items-center gap-1.5 rounded border border-red-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50";
+const selectCls =
+  "rounded border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-800 outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20";
+const thinScroll = "[scrollbar-width:thin] [scrollbar-color:#c9c3b3_transparent]";
 
 // ─────────────────────────────────────────────────────────────────────────────
 const FACTOR_REF_ORDER: ReferenceKey[] = ["ESDM", "DEFRA"];
 const EPSILON = 0.0005;
 
+// Warna lencana referensi: tanah (ESDM) dan lumut (DEFRA)
 const REF_BADGE: Record<ReferenceKey, string> = {
-  ESDM:  "bg-red-100 text-red-700 border-red-200",
-  DEFRA: "bg-purple-100 text-purple-700 border-purple-200",
+  ESDM:  "bg-[#efe6d2] text-[#6b4f1d] border-[#d9c9a3]",
+  DEFRA: "bg-[#dfe9e3] text-[#1b4332] border-[#b7cfc0]",
 };
 const REF_SHORT: Record<ReferenceKey, string> = { ESDM: "ESDM", DEFRA: "DEFRA" };
 
@@ -33,7 +48,6 @@ function resolveKategori(aktivitas: string): string {
   return ACTIVITY_OPTIONS.find((o) => o.value === aktivitas)?.category ?? aktivitas;
 }
 
-// Helper — tentukan Energy_Type per Activity_ID (dipakai di Dim_Activity)
 // Helper — tentukan Energy_Type per Activity_ID
 // Prioritas: kategori eksplisit "Renewable Energy" dari ACTIVITY_OPTIONS,
 // fallback ke cek faktor emisi (untuk aktivitas renewable lain yang tidak dikategorikan eksplisit).
@@ -122,7 +136,7 @@ function ReferenceBadge({
   if (isZeroEmission) {
     return (
       <span
-        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-600 border border-teal-100"
+        className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800"
         title="Energi terbarukan — faktor emisi nol"
       >
         <Leaf size={9} />Zero
@@ -135,15 +149,15 @@ function ReferenceBadge({
       : REFERENCE_METADATA[ref].label;
     return (
       <span
-        className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[10px] font-bold border ${REF_BADGE[ref]}`}
+        className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-semibold ${REF_BADGE[ref]}`}
         title={tooltipText}
       >
         {REF_SHORT[ref]}
-        {isAmbiguous && <span className="opacity-40 text-[9px] font-normal leading-none">*</span>}
+        {isAmbiguous && <span className="text-[9px] font-normal leading-none opacity-50">*</span>}
       </span>
     );
   }
-  return <span className="text-[10px] text-gray-300 font-medium" title="Faktor tidak cocok">—</span>;
+  return <span className="text-[10px] font-medium text-stone-300" title="Faktor tidak cocok">—</span>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -208,7 +222,6 @@ function exportTableauCSV(data: DetailOutput[], selectedReference: ReferenceKey)
   setColWidths(ws2, [24, 32, 22, 16]);
   XLSX.utils.book_append_sheet(wb, ws2, "Category");
 
-  // ── SHEET 3: Dim_Scope — 1 baris per Scope unik ────────────────────────────
   // ── SHEET 3: Dim_Scope — 1 baris per Scope unik + total agregat ───────────
   const totalAllKg = data.reduce((s, r) => s + r.emisi_tCO2e * 1000, 0);
 
@@ -279,7 +292,7 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
     return match ? match[0] : "Lainnya";
   };
 
-  // ✅ categoryMap masih dipakai untuk render kolom Kategori di tabel
+  // categoryMap masih dipakai untuk render kolom Kategori di tabel
   const categoryMap = useMemo(() => {
     const map: Record<string, string> = {};
     ACTIVITY_OPTIONS.forEach((opt) => { map[opt.value] = opt.category; });
@@ -348,7 +361,7 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
     const doc = new jsPDF("l", "mm", "a4");
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(16);
-    doc.setTextColor(16, 185, 129);
+    doc.setTextColor(27, 67, 50);
     doc.text("GHG EMISSION REPORT", 14, 15);
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(9);
@@ -366,14 +379,14 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
         ["Total Keseluruhan", `${summaryGHG.total.toFixed(4)} tCO2e`],
       ],
       theme: "striped",
-      headStyles: { fillColor: [31, 41, 55] },
+      headStyles: { fillColor: [15, 47, 35] },
       columnStyles: { 1: { fontStyle: "bold", halign: "right" } },
       margin: { left: 14, right: 14 },
     });
 
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(11);
-    doc.setTextColor(31, 41, 55);
+    doc.setTextColor(15, 47, 35);
     doc.text("Rincian Aktivitas:", 14, (doc as any).lastAutoTable.finalY + 10);
 
     autoTable(doc, {
@@ -397,7 +410,7 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
         ];
       }),
       theme: "grid",
-      headStyles: { fillColor: [16, 185, 129] },
+      headStyles: { fillColor: [27, 67, 50] },
       styles: { fontSize: 7.5 },
       columnStyles: {
         5: { halign: "right" }, 6: { halign: "right" },
@@ -419,34 +432,34 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
   const legendRefs: ReferenceKey[] = ["ESDM", "DEFRA"];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
 
       {/* ── TABEL UTAMA ──────────────────────────────────────────────────── */}
-      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="overflow-hidden rounded-md border border-stone-300 bg-[#fbfaf6] p-4">
 
         {/* Header & action bar */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-4 border-b border-b-gray-100">
+        <div className="mb-3 flex flex-col justify-between gap-3 border-b border-stone-200 pb-3 lg:flex-row lg:items-center">
           <div>
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
-              <ClipboardList size={18} className="text-emerald-600" />
+            <h3 className={`${display} flex items-center gap-2 text-base font-medium text-emerald-950`}>
+              <ClipboardList size={16} className="text-emerald-800" />
               Rincian Perhitungan Emisi
             </h3>
-            <p className="text-xs text-gray-500 mt-1">
-              Total: <span className="font-semibold text-gray-700">{filteredData.length}</span> dari{" "}
-              <span className="font-semibold">{detail.length}</span> data komponen
+            <p className="mt-0.5 text-xs text-stone-500">
+              Menampilkan <span className="font-semibold text-stone-700">{filteredData.length}</span> dari{" "}
+              <span className="font-semibold text-stone-700">{detail.length}</span> data komponen
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {/* Tombol Tableau Export */}
             <div className="relative">
               <button
                 onClick={() => exportTableauCSV(filteredData, selectedReference)}
                 onMouseEnter={() => setShowTableauInfo(true)}
                 onMouseLeave={() => setShowTableauInfo(false)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-[#1f77b4] hover:bg-[#1a66a0] text-white rounded-xl text-xs font-semibold shadow-sm transition"
+                className={btnOutline}
               >
-                <svg width="14" height="14" viewBox="0 0 32 32" fill="currentColor">
+                <svg width="13" height="13" viewBox="0 0 32 32" fill="currentColor" className="text-emerald-800">
                   <path d="M14.5 4h3v6.5H24v3h-6.5V20h-3v-6.5H8v-3h6.5z"/>
                   <rect x="2" y="26" width="28" height="2" rx="1"/>
                 </svg>
@@ -454,14 +467,14 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
               </button>
 
               {showTableauInfo && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-gray-900 text-white text-[11px] rounded-xl p-3 z-50 shadow-xl leading-relaxed">
-                  <p className="font-semibold mb-1.5">Format Tableau Relationships (.xlsx) — 3 Sheet</p>
-                  <div className="space-y-1 text-gray-300">
-                    <p><span className="text-white font-medium">① Emissions</span> — data transaksi, 1 baris per record aktivitas</p>
-                    <p><span className="text-white font-medium">② Activity</span> — master aktivitas (key: Activity_ID)</p>
-                    <p><span className="text-white font-medium">③ Scope</span> — master scope (key: Scope)</p>
+                <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-md bg-emerald-950 p-3 text-[11px] leading-relaxed text-stone-100 shadow-xl">
+                  <p className="mb-1.5 font-semibold">Format Tableau Relationships (.xlsx) — 3 Sheet</p>
+                  <div className="space-y-1 text-stone-300">
+                    <p><span className="font-medium text-white">① Emissions</span> — data transaksi, 1 baris per record aktivitas</p>
+                    <p><span className="font-medium text-white">② Activity</span> — master aktivitas (key: Activity_ID)</p>
+                    <p><span className="font-medium text-white">③ Scope</span> — master scope (key: Scope)</p>
                   </div>
-                  <p className="text-gray-400 mt-2 pt-2 border-t border-gray-700">
+                  <p className="mt-2 border-t border-emerald-800 pt-2 text-stone-400">
                     Di Tableau, hubungkan via canvas <strong>Relationships</strong>: Emissions.Activity_ID ↔ Activity.Activity_ID,
                     dan Emissions.Scope ↔ Scope.Scope.
                   </p>
@@ -469,75 +482,78 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
               )}
             </div>
 
-            <button onClick={downloadLaporanPDF} className="flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-sm transition">
-              <FileDown size={14} /> PDF
+            <button onClick={downloadLaporanPDF} className={btnOutline}>
+              <FileDown size={13} /> PDF
             </button>
-            <button onClick={triggerExcelDownload} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition">
-              <FileSpreadsheet size={14} /> Excel
+            <button onClick={triggerExcelDownload} className={btnSolid}>
+              <FileSpreadsheet size={13} /> Excel
             </button>
             {onDeleteAllRecords && (
-              <button onClick={onDeleteAllRecords} className="flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-semibold border border-red-200 transition">
-                <Trash2 size={14} /> Hapus Semua
+              <button onClick={onDeleteAllRecords} className={btnDanger}>
+                <Trash2 size={13} /> Hapus Semua
               </button>
             )}
           </div>
         </div>
 
-        {/* Filter bar */}
-        <div className="flex flex-wrap items-center justify-end gap-3 mb-4 bg-gray-50/50 p-3 rounded-xl border border-gray-100">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-            <Filter size={14} /><span>Filter:</span>
-          </div>
-          <select value={selectedScope} onChange={(e) => handleScopeChange(e.target.value)}
-            className="text-xs bg-white border border-gray-200 text-gray-700 rounded-xl px-3 py-2 outline-none">
-            <option value="all">Semua Scope</option>
-            {scopeOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select value={selectedYear} onChange={(e) => handleYearChange(e.target.value)}
-            className="text-xs bg-white border border-gray-200 text-gray-700 rounded-xl px-3 py-2 outline-none">
-            <option value="all">Semua Tahun</option>
-            {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-
-        {/* Legenda */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-4 px-1">
-          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Ref.:</span>
-          {legendRefs.map((ref) => (
-            <span key={ref} className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border ${REF_BADGE[ref]}`} title={REFERENCE_METADATA[ref].label}>
-              {REF_SHORT[ref]}
+        {/* Legenda + filter */}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Ref.</span>
+            {legendRefs.map((ref) => (
+              <span
+                key={ref}
+                className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${REF_BADGE[ref]}`}
+                title={REFERENCE_METADATA[ref].label}
+              >
+                {REF_SHORT[ref]}
+              </span>
+            ))}
+            <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+              <Leaf size={9} />Zero
             </span>
-          ))}
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-600 border border-teal-100">
-            <Leaf size={9} />Zero
-          </span>
-          <span className="text-[10px] text-gray-400">
-            · <span className="font-semibold">*</span> = identik di beberapa referensi
-          </span>
+            <span className="text-[10px] text-stone-500">
+              · <span className="font-semibold">*</span> identik di beberapa referensi
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1 text-xs font-medium text-stone-500">
+              <Filter size={12} /> Filter
+            </span>
+            <select value={selectedScope} onChange={(e) => handleScopeChange(e.target.value)} className={selectCls}>
+              <option value="all">Semua Scope</option>
+              {scopeOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select value={selectedYear} onChange={(e) => handleYearChange(e.target.value)} className={selectCls}>
+              <option value="all">Semua Tahun</option>
+              {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
         </div>
 
         {/* Tabel */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1060px]">
+        <div className={`overflow-x-auto rounded border border-stone-200 bg-white ${thinScroll}`}>
+          <table className="w-full min-w-[980px] text-[12px]">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase text-xs">
-                <th className="p-3 text-center w-10">No</th>
-                <th className="p-3 text-left">Aktivitas</th>
-                <th className="p-3 text-left">Detail</th>
-                <th className="p-3 text-left">Periode</th>
-                <th className="p-3 text-left">Kategori</th>
-                <th className="p-3 text-right">Jumlah</th>
-                <th className="p-3 text-right">Faktor</th>
-                <th className="p-3 text-center">Ref.</th>
-                <th className="p-3 text-right">Emisi (kgCO₂e)</th>
-                <th className="p-3 text-right">Emisi (tCO₂e)</th>
-                <th className="p-3 text-center">File Sumber</th>
+              <tr className="border-b border-stone-200 bg-[#f1eee4] text-[10px] uppercase tracking-wider text-stone-600">
+                <th className="w-10 p-2.5 text-center font-semibold">No</th>
+                <th className="p-2.5 text-left font-semibold">Aktivitas</th>
+                <th className="p-2.5 text-left font-semibold">Detail</th>
+                <th className="p-2.5 text-left font-semibold">Periode</th>
+                <th className="p-2.5 text-left font-semibold">Kategori</th>
+                <th className="p-2.5 text-right font-semibold">Jumlah</th>
+                <th className="p-2.5 text-right font-semibold">Faktor</th>
+                <th className="p-2.5 text-center font-semibold">Ref.</th>
+                <th className="p-2.5 text-right font-semibold">Emisi (kgCO₂e)</th>
+                <th className="p-2.5 text-right font-semibold">Emisi (tCO₂e)</th>
+                <th className="p-2.5 text-center font-semibold">Sumber</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-stone-100">
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="p-8 text-center text-gray-400">
+                  <td colSpan={11} className="p-8 text-center text-stone-400">
                     Tidak ada data yang cocok dengan filter.
                   </td>
                 </tr>
@@ -548,27 +564,27 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
                   let displayFaktor = row.faktor_konversi ?? 0;
                   if (displayFaktor > 0 && displayFaktor < 0.01) displayFaktor *= 1000;
 
-                  // ✅ Gunakan categoryMap — tidak akses row.kategori
+                  // Gunakan categoryMap — tidak akses row.kategori
                   const namaKategori = categoryMap[row.aktivitas] ?? "-";
 
                   return (
-                    <tr key={idx} className="hover:bg-gray-50/70 transition">
-                      <td className="p-3 text-center font-semibold text-gray-400 text-xs">{nomor}</td>
-                      <td className="p-3 font-medium text-gray-900">
+                    <tr key={idx} className="transition-colors hover:bg-[#faf9f4]">
+                      <td className="p-2.5 text-center text-[11px] font-semibold text-stone-400">{nomor}</td>
+                      <td className="p-2.5 font-medium text-stone-900">
                         {ACTIVITY_LABELS[row.aktivitas] ?? row.aktivitas}
-                        <span className="block text-[10px] text-gray-400 mt-0.5">{row.scope}</span>
+                        <span className="mt-0.5 block text-[10px] font-normal text-stone-400">{row.scope}</span>
                       </td>
-                      <td className="p-3 text-gray-600 text-xs">{row.detail_aktivitas || "-"}</td>
-                      <td className="p-3 text-gray-600 text-xs">{getYearFromPeriode(row.periode)}</td>
-                      <td className="p-3 text-gray-500 capitalize text-xs">{namaKategori}</td>
-                      <td className="p-3 text-right font-mono text-xs">
+                      <td className="p-2.5 text-stone-600">{row.detail_aktivitas || "-"}</td>
+                      <td className="p-2.5 text-stone-600">{getYearFromPeriode(row.periode)}</td>
+                      <td className="p-2.5 capitalize text-stone-500">{namaKategori}</td>
+                      <td className="p-2.5 text-right font-mono tabular-nums text-stone-800">
                         {row.jumlah.toLocaleString()}
-                        <span className="text-gray-400 ml-1">{row.satuan}</span>
+                        <span className="ml-1 text-stone-400">{row.satuan}</span>
                       </td>
-                      <td className="p-3 text-right font-mono font-semibold text-gray-800 text-xs">
+                      <td className="p-2.5 text-right font-mono font-semibold tabular-nums text-stone-800">
                         {displayFaktor.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                       </td>
-                      <td className="p-3 text-center">
+                      <td className="p-2.5 text-center">
                         <ReferenceBadge
                           aktivitas={row.aktivitas}
                           faktorKonversi={displayFaktor}
@@ -576,21 +592,24 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
                           selectedReference={selectedReference}
                         />
                       </td>
-                      <td className="p-3 text-right font-mono text-gray-700 text-xs">
+                      <td className="p-2.5 text-right font-mono tabular-nums text-stone-700">
                         {emisiKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="p-3 text-right font-bold text-emerald-700 text-xs">
+                      <td className="p-2.5 text-right font-semibold tabular-nums text-emerald-900">
                         {row.emisi_tCO2e.toFixed(4)}
-                        <span className="text-[10px] text-gray-400 ml-1 font-normal">tCO₂e</span>
+                        <span className="ml-1 text-[10px] font-normal text-stone-400">tCO₂e</span>
                       </td>
-                      <td className="p-3 text-center">
+                      <td className="p-2.5 text-center">
                         {row.file_name ? (
-                          <div className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg text-[11px] font-medium max-w-[140px] truncate" title={row.file_name}>
+                          <div
+                            className="inline-flex max-w-[140px] items-center gap-1 truncate rounded bg-[#eef3ec] px-1.5 py-0.5 text-[11px] font-medium text-emerald-900"
+                            title={row.file_name}
+                          >
                             <FileSpreadsheet size={11} className="shrink-0" />
                             <span className="truncate">{row.file_name}</span>
                           </div>
                         ) : (
-                          <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 px-2 py-1 rounded-lg text-[11px] font-medium">
+                          <div className="inline-flex items-center gap-1 rounded bg-stone-200/70 px-1.5 py-0.5 text-[11px] font-medium text-stone-600">
                             <User size={11} className="shrink-0" />
                             <span>Manual</span>
                           </div>
@@ -606,28 +625,28 @@ export default function EmissionTable({ detail, onDeleteAllRecords, selectedRefe
 
         {/* Pagination */}
         {filteredData.length > 0 && (
-          <div className="mt-5 flex items-center justify-between">
-            <div className="text-xs text-gray-500">
+          <div className="mt-3 flex items-center justify-between">
+            <div className="text-xs text-stone-500">
               Menampilkan{" "}
-              <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span>–
-              <span className="font-semibold">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span>{" "}
-              dari <span className="font-semibold">{filteredData.length}</span> data
+              <span className="font-semibold text-stone-700">{(currentPage - 1) * itemsPerPage + 1}</span>–
+              <span className="font-semibold text-stone-700">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span>{" "}
+              dari <span className="font-semibold text-stone-700">{filteredData.length}</span> data
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                 disabled={currentPage === 1}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                className="flex items-center gap-1 rounded border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-medium text-stone-700 transition hover:bg-stone-50 disabled:opacity-40"
               >
-                <ChevronLeft size={16} /> Prev
+                <ChevronLeft size={14} /> Sebelumnya
               </button>
-              <div className="px-4 py-2 text-sm font-semibold text-gray-700">{currentPage} / {totalPages}</div>
+              <div className="px-2.5 text-xs font-semibold text-stone-700">{currentPage} / {totalPages}</div>
               <button
                 onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                className="flex items-center gap-1 rounded border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-medium text-stone-700 transition hover:bg-stone-50 disabled:opacity-40"
               >
-                Next <ChevronRight size={16} />
+                Berikutnya <ChevronRight size={14} />
               </button>
             </div>
           </div>
@@ -648,13 +667,14 @@ function TableauEmbedSection() {
   const [inputUrl,   setInputUrl]   = useState("");
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [showGuide,  setShowGuide]  = useState(false);
+  const [urlAlert,   setUrlAlert]   = useState(false);
 
   const handleEmbed = () => {
     if (!inputUrl.trim()) return;
     let url = inputUrl.trim().split("?")[0];
 
     if (!url.includes("public.tableau.com/views") && !url.includes("public.tableau.com/app/profile")) {
-      alert("Masukkan URL Tableau Public yang valid.\nContoh: https://public.tableau.com/views/NamaWorkbook/NamaSheet");
+      setUrlAlert(true);
       return;
     }
 
@@ -670,25 +690,25 @@ function TableauEmbedSection() {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="overflow-hidden rounded-md border border-stone-300 bg-[#fbfaf6]">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#1f77b4] flex items-center justify-center">
-            <svg width="16" height="16" viewBox="0 0 32 32" fill="white">
+      <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded bg-emerald-950">
+            <svg width="15" height="15" viewBox="0 0 32 32" fill="white">
               <path d="M14.5 4h3v6.5H24v3h-6.5V20h-3v-6.5H8v-3h6.5z"/>
               <rect x="2" y="26" width="28" height="2" rx="1"/>
             </svg>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-gray-900">Tableau Public Embed</h3>
-            <p className="text-[11px] text-gray-400 mt-0.5">Tampilkan viz Tableau Public langsung di sini</p>
+            <h3 className={`${display} text-base font-medium text-emerald-950`}>Tableau Public Embed</h3>
+            <p className="mt-0.5 text-[11px] text-stone-500">Tampilkan viz Tableau Public langsung di sini</p>
           </div>
         </div>
 
         <button
           onClick={() => setShowGuide(!showGuide)}
-          className="text-[11px] font-semibold text-[#1f77b4] hover:underline flex items-center gap-1"
+          className="flex items-center gap-1 text-[11px] font-semibold text-emerald-900 underline-offset-4 hover:underline"
         >
           <ExternalLink size={11} />
           {showGuide ? "Tutup panduan" : "Cara pakai"}
@@ -697,25 +717,25 @@ function TableauEmbedSection() {
 
       {/* Panduan */}
       {showGuide && (
-        <div className="mx-6 mt-4 bg-blue-50 border border-blue-100 rounded-xl p-4 text-[12px] text-blue-800 space-y-2">
-          <p className="font-bold text-[13px]">Cara integrasi dengan Tableau Public:</p>
-          <ol className="list-decimal list-inside space-y-1.5 text-blue-700">
-            <li>Klik <strong>Export Tableau</strong> di tabel atas untuk download file <code>.xlsx</code> (Fact_Emissions + Dim_Activity + Dim_Scope).</li>
-            <li>Buka <a href="https://public.tableau.com" target="_blank" rel="noopener noreferrer" className="underline font-semibold">Tableau Public</a> → login → <strong>Create → Web Authoring</strong>.</li>
-            <li>Upload file <code>Tableau_GHG_Emission_*.xlsx</code> sebagai data source.</li>
+        <div className="mx-4 mt-3 space-y-2 rounded border border-[#cfdccf] bg-[#eef3ec] p-3 text-[12px] text-emerald-950">
+          <p className="text-[13px] font-semibold">Cara integrasi dengan Tableau Public:</p>
+          <ol className="list-inside list-decimal space-y-1.5 text-emerald-900/90">
+            <li>Klik <strong>Export Tableau</strong> di tabel atas untuk mengunduh file <code>.xlsx</code> (Fact_Emissions + Dim_Activity + Dim_Scope).</li>
+            <li>Buka <a href="https://public.tableau.com" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Tableau Public</a> → login → <strong>Create → Web Authoring</strong>.</li>
+            <li>Unggah file <code>Tableau_GHG_Emission_*.xlsx</code> sebagai data source.</li>
             <li>Di canvas <strong>Relationships</strong>, hubungkan: <code>Fact_Emissions.Activity_ID</code> ↔ <code>Dim_Activity.Activity_ID</code>, dan <code>Fact_Emissions.Scope</code> ↔ <code>Dim_Scope.Scope</code>.</li>
             <li>Buat viz/dashboard, lalu klik <strong>Publish</strong>.</li>
-            <li>Buka viz yang sudah dipublish → <strong>Share</strong> → salin <strong>Link</strong>.</li>
+            <li>Buka viz yang sudah dipublikasikan → <strong>Share</strong> → salin <strong>Link</strong>.</li>
             <li>Tempel URL di kotak input di bawah → klik <strong>Tampilkan</strong>.</li>
           </ol>
-          <p className="text-blue-500 text-[11px] mt-1">
+          <p className="mt-1 text-[11px] text-emerald-900/70">
             Format URL valid: <code>https://public.tableau.com/views/NamaWorkbook/NamaSheet</code>
           </p>
         </div>
       )}
 
       {/* Input URL */}
-      <div className="px-6 py-4">
+      <div className="px-4 py-3">
         {!isEmbedded ? (
           <div className="flex gap-2">
             <input
@@ -724,23 +744,23 @@ function TableauEmbedSection() {
               onChange={(e) => setInputUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleEmbed()}
               placeholder="https://public.tableau.com/views/NamaWorkbook/NamaSheet"
-              className="flex-1 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1f77b4] placeholder:text-gray-400"
+              className="flex-1 rounded border border-stone-300 bg-white px-3 py-2 text-[13px] text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20"
             />
             <button
               onClick={handleEmbed}
               disabled={!inputUrl.trim()}
-              className="px-4 py-2.5 bg-[#1f77b4] hover:bg-[#1a66a0] disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition shrink-0"
+              className="shrink-0 rounded bg-emerald-900 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-40"
             >
               Tampilkan
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse" />
-              <p className="text-xs font-medium text-blue-800 truncate">{embedUrl.split("?")[0]}</p>
+          <div className="flex items-center justify-between gap-3 rounded border border-[#cfdccf] bg-[#eef3ec] px-3 py-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-600" />
+              <p className="truncate text-xs font-medium text-emerald-950">{embedUrl.split("?")[0]}</p>
             </div>
-            <button onClick={handleReset} className="text-xs font-semibold text-red-500 hover:text-red-700 transition shrink-0">
+            <button onClick={handleReset} className="shrink-0 text-xs font-semibold text-red-700 transition hover:text-red-800">
               Ganti URL
             </button>
           </div>
@@ -749,37 +769,45 @@ function TableauEmbedSection() {
 
       {/* Iframe embed */}
       {isEmbedded && embedUrl ? (
-        <div className="px-6 pb-6">
-          <div className="relative w-full rounded-xl overflow-hidden border border-gray-200 bg-gray-50" style={{ paddingTop: "56.25%" }}>
+        <div className="px-4 pb-4">
+          <div className="relative w-full overflow-hidden rounded border border-stone-300 bg-white" style={{ paddingTop: "56.25%" }}>
             <iframe
               src={embedUrl}
-              className="absolute inset-0 w-full h-full"
+              className="absolute inset-0 h-full w-full"
               frameBorder="0"
               allowFullScreen
               title="Tableau Viz"
               sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
             />
           </div>
-          <p className="text-[10px] text-gray-400 mt-2 text-center">
+          <p className="mt-2 text-center text-[10px] text-stone-500">
             Viz ditampilkan dari Tableau Public. Pastikan viz bersifat publik agar dapat di-embed.
           </p>
         </div>
       ) : !isEmbedded ? (
-        <div className="mx-6 mb-6 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 flex flex-col items-center justify-center py-14 gap-3 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-[#1f77b4]/10 flex items-center justify-center">
-            <svg width="28" height="28" viewBox="0 0 32 32" fill="#1f77b4">
+        <div className="mx-4 mb-4 flex flex-col items-center justify-center gap-2.5 rounded border border-dashed border-stone-300 bg-white/60 py-10 text-center">
+          <div className="flex h-11 w-11 items-center justify-center rounded bg-[#eef3ec]">
+            <svg width="22" height="22" viewBox="0 0 32 32" fill="#1b4332">
               <path d="M14.5 4h3v6.5H24v3h-6.5V20h-3v-6.5H8v-3h6.5z"/>
               <rect x="2" y="26" width="28" height="2" rx="1"/>
             </svg>
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-600">Belum ada viz yang ditampilkan</p>
-            <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
-              Tempelkan URL Tableau Public di atas untuk embed viz langsung ke halaman ini.
+            <p className="text-[13px] font-semibold text-stone-700">Belum ada viz yang ditampilkan</p>
+            <p className="mx-auto mt-1 max-w-xs text-xs text-stone-500">
+              Tempelkan URL Tableau Public di atas untuk menampilkan viz langsung di halaman ini.
             </p>
           </div>
         </div>
       ) : null}
+
+      <AlertModal
+        isOpen={urlAlert}
+        type="error"
+        title="URL Tidak Valid"
+        message={"Masukkan URL Tableau Public yang valid.\nContoh: https://public.tableau.com/views/NamaWorkbook/NamaSheet"}
+        onClose={() => setUrlAlert(false)}
+      />
     </div>
   );
 }
