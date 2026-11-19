@@ -3,8 +3,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-import { CheckCircle, XCircle, AlertTriangle, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import SummaryCards         from "@/app/components/carbon/SummaryCards";
 import EmissionBarChart     from "@/app/components/carbon/EmissionBarChart";
@@ -15,11 +16,15 @@ import EmissionTable        from "@/app/components/carbon/EmissionTable";
 import RecommendationSection from "@/app/components/carbon/RecommendationSection";
 import MethodologyCard      from "@/app/components/carbon/MethodologyCard";
 import DashboardHeader      from "@/app/components/carbon/DashboardHeader";
+import DashboardBackdrop    from "@/app/components/dashboard-backdrop";
+import { NatureBackdrop }   from "@/app/components/nature-backdrop";
+import AlertModal           from "@/app/components/ui/alert-modal";
 
 import { ResultData }   from "@/app/types/carbon";
 import { ReferenceKey } from "@/app/constants/activities";
 
 const SESSION_KEY = "emissionAnalysisData";
+const display = "font-[family-name:var(--font-display)]";
 
 const initialResult: ResultData = {
   total_tCO2e: 0,
@@ -46,13 +51,6 @@ export default function AnalysisPage() {
     message: string;
     onConfirm?: () => void;
   }>({ isOpen: false, type: "success", title: "", message: "" });
-
-  useEffect(() => {
-    if (modal.isOpen && modal.type === "success") {
-      const timer = setTimeout(() => setModal((prev) => ({ ...prev, isOpen: false })), 3500);
-      return () => clearTimeout(timer);
-    }
-  }, [modal.isOpen, modal.type]);
 
   // ── Fetch langsung dari DB — selalu fresh ────────────────────────────────
   const fetchEmissionRecords = useCallback(async (uid: string) => {
@@ -120,26 +118,31 @@ export default function AnalysisPage() {
   // ── Auth check ────────────────────────────────────────────────────────────
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push("/login");
-        return;
-      }
-      setIsAuthorized(true);
-      setUserEmail(session.user.email ?? "");
-      setUserId(session.user.id);
-
-      // Ambil selectedReference dari sessionStorage jika ada
       try {
-        const raw = sessionStorage.getItem(SESSION_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed.selectedReference) setSelectedReference(parsed.selectedReference);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          router.push("/login");
+          return;
         }
-      } catch { /* abaikan */ }
+        setIsAuthorized(true);
+        setUserEmail(session.user.email ?? "");
+        setUserId(session.user.id);
 
-      // Selalu fetch fresh dari DB
-      fetchEmissionRecords(session.user.id);
+        // Ambil selectedReference dari sessionStorage jika ada
+        try {
+          const raw = sessionStorage.getItem(SESSION_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.selectedReference) setSelectedReference(parsed.selectedReference);
+          }
+        } catch { /* abaikan */ }
+
+        // Selalu fetch fresh dari DB
+        fetchEmissionRecords(session.user.id);
+      } catch {
+        // Server autentikasi tidak terjangkau: kembalikan ke halaman login
+        router.push("/login");
+      }
     };
     checkUser();
   }, [router, fetchEmissionRecords]);
@@ -172,93 +175,88 @@ export default function AnalysisPage() {
   // ── Loading ───────────────────────────────────────────────────────────────
   if (!isAuthorized) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500 font-semibold">
-        Memeriksa Autentikasi...
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#081c15]">
+        <NatureBackdrop />
+        <div className="relative z-10 flex items-center gap-3 rounded-md bg-[#f6f4ee] px-5 py-3 text-sm font-medium text-emerald-950 shadow-xl">
+          <Loader2 className="h-4 w-4 animate-spin text-emerald-800" />
+          Memeriksa autentikasi...
+        </div>
       </div>
     );
   }
 
+  const hasData = resultData.detail.length > 0;
+
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-800">
+    <main className="relative min-h-screen bg-[#f6f4ee] text-stone-800">
+      <DashboardBackdrop />
 
-      {/* Header identik dengan dashboard */}
-      <DashboardHeader
-        userEmail={userEmail}
-        onLogout={handleLogout}
-        onNavigateAnalysis={() => router.push("/dashboard/analysis")}
-      />
+      <div className="relative z-10">
+        {/* Header identik dengan dashboard */}
+        <DashboardHeader
+          userEmail={userEmail}
+          onLogout={handleLogout}
+          onNavigateAnalysis={() => router.push("/dashboard/analysis")}
+        />
 
-      <div className="max-w-screen-2xl mx-auto px-4 py-6 sm:px-6 lg:px-8 text-gray-800">
-        <div className="space-y-6">
-
-          <SummaryCards resultData={resultData} />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <EmissionBarChart chartData={resultData.chartData} />
-            <EmissionPieChart chartData={resultData.chartData} total={resultData.total_tCO2e} />
+        <div className="mx-auto max-w-screen-2xl px-4 py-4 sm:px-6 lg:px-8">
+          <div className="mb-4">
+            <h1 className={`${display} text-2xl font-medium tracking-tight text-emerald-950`}>
+              Analisis & Chart
+            </h1>
+            <p className="mt-1 text-sm text-stone-600">
+              Ringkasan, grafik, dan rekomendasi dari seluruh data emisi Anda.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <EmissionLineChart    detail={resultData.detail} />
-            <EmissionStackedChart detail={resultData.detail} />
+          {!hasData && (
+            <div className="mb-4 rounded-md border border-stone-300 bg-[#fbfaf6] px-4 py-3 text-[13px] text-stone-700">
+              Belum ada data emisi.{" "}
+              <Link
+                href="/dashboard"
+                className="font-semibold text-emerald-900 underline-offset-4 hover:underline"
+              >
+                Tambahkan data di Dashboard
+              </Link>{" "}
+              untuk melihat grafik dan rekomendasi.
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <SummaryCards resultData={resultData} />
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <EmissionBarChart chartData={resultData.chartData} />
+              <EmissionPieChart chartData={resultData.chartData} total={resultData.total_tCO2e} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <EmissionLineChart    detail={resultData.detail} />
+              <EmissionStackedChart detail={resultData.detail} />
+            </div>
+
+            {/* EmissionTable sudah mencakup Tableau export + embed section */}
+            <EmissionTable
+              detail={resultData.detail}
+              onDeleteAllRecords={handleDeleteAllRecords}
+              selectedReference={selectedReference}
+            />
+
+            <RecommendationSection detail={resultData.detail} />
+            <MethodologyCard />
           </div>
-
-          {/* EmissionTable sekarang sudah include Tableau export + embed section */}
-          <EmissionTable
-            detail={resultData.detail}
-            onDeleteAllRecords={handleDeleteAllRecords}
-            selectedReference={selectedReference}
-          />
-
-          <RecommendationSection detail={resultData.detail} />
-          <MethodologyCard />
         </div>
       </div>
 
-      {/* ── GLOBAL MODAL ─────────────────────────────────────────────────── */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/40 backdrop-blur-[2px]">
-          <div className="bg-white rounded-3xl p-8 shadow-2xl max-w-lg w-full text-center space-y-5 border border-gray-100 relative animate-in fade-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setModal((prev) => ({ ...prev, isOpen: false }))}
-              className="absolute right-5 top-5 text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition"
-            >
-              <X size={20} />
-            </button>
-            <div className="flex justify-center pt-2">
-              <div className={`p-4 rounded-full ${modal.type === "success" ? "bg-emerald-50" : modal.type === "error" ? "bg-red-50" : "bg-amber-50"}`}>
-                {modal.type === "success" && <CheckCircle   className="text-emerald-500" size={64} />}
-                {modal.type === "error"   && <XCircle       className="text-red-500"     size={64} />}
-                {modal.type === "confirm" && <AlertTriangle className="text-amber-500"   size={64} />}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-gray-900">{modal.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed px-4">{modal.message}</p>
-            </div>
-            {modal.type === "confirm" ? (
-              <div className="flex gap-3 pt-3">
-                <button
-                  onClick={() => setModal((prev) => ({ ...prev, isOpen: false }))}
-                  className="flex-1 py-3 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition"
-                >
-                  Batal
-                </button>
-                <button
-                  onClick={() => { modal.onConfirm?.(); setModal((prev) => ({ ...prev, isOpen: false })); }}
-                  className="flex-1 py-3 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 transition shadow-sm"
-                >
-                  Ya, Hapus
-                </button>
-              </div>
-            ) : (
-              <div className="text-xs text-gray-400 pt-2">
-                {modal.type === "success" ? "Jendela ini akan tertutup otomatis..." : "Klik ikon silang di atas untuk menutup"}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* ── ALERT (komponen yang sama dipakai di seluruh aplikasi) ─────────── */}
+      <AlertModal
+        isOpen={modal.isOpen}
+        type={modal.type}
+        title={modal.title}
+        message={modal.message}
+        onClose={() => setModal((p) => ({ ...p, isOpen: false }))}
+        onConfirm={modal.onConfirm}
+      />
     </main>
   );
 }
